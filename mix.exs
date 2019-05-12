@@ -52,7 +52,6 @@ defmodule Honeybee.MixProject do
     ]
   end
 
-  # def elixirc_paths(:bench), do: ["lib", "benchmarks/lib"]
   def elixirc_paths(:test), do: ["lib", "test"]
   def elixirc_paths(_), do: ["lib"]
 
@@ -60,19 +59,19 @@ defmodule Honeybee.MixProject do
   defp deps do
     [
       {:plug, "~> 1.7.1"},
-      {:benchee, "~> 0.13", only: :dev},
-      {:benchee_html, "~> 0.4", only: :dev},
-      {:phoenix, "~> 1.4.0", only: :dev},
-      {:dialyxir, "~> 0.4", only: :dev},
+      {:benchee, "~> 0.13", only: :test},
+      {:benchee_html, "~> 0.4", only: :test},
+      {:phoenix, "~> 1.4.0", only: :test},
+      {:dialyxir, "~> 0.4", only: :test},
       {:ex_doc, "~> 0.19", only: :dev, runtime: false}
     ]
   end
 
   defp package do
     [
-      maintainers: ["Simon Finnman"],
+      maintainers: ["Apiologist"],
       licenses: ["GNU"],
-      links: %{github: "https://github.com/sfinnman/honeybee"},
+      links: %{github: "https://github.com/apiologist/honeybee"},
       files: ~w(lib mix.exs README.md .formatter.exs)
     ]
   end
