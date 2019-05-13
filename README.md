@@ -1,3 +1,7 @@
+# Disclaimer
+Honeybee is currently in a very early stage. Use in production environments is not advised.
+Report any issues to the [IssueTracker](https://github.com/apiologist/honeybee/)
+
 # What is Honeybee?
 Honeybee is a router intended for RESTful APIs. It's built on [Plug](https://hexdocs.pm/plug/readme.html).
 
