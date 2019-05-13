@@ -1,15 +1,13 @@
 defmodule Honeybee.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
-
   def project do
     [
       app: :honeybee,
-      version: @version,
-      elixir: "~> 1.7",
+      version: "0.0.1",
+      elixir: "~> 1.8",
       elixirc_paths: elixirc_paths(Mix.env()),
-      aliases: aliases(),
+      aliases: [],
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       docs: [
@@ -28,29 +26,15 @@ defmodule Honeybee.MixProject do
         flags: [:unmatched_returns, :error_handling, :race_conditions, :underspecs]
       ],
       name: "Honeybee",
-      source_url: "https://github.com/sfinnman/honeybee",
+      source_url: "https://github.com/apiologist/honeybee",
       description: """
-      Blazing fast Phoenix style plug router.
+        Honeybee is an exteremely fast and small router.
       """
     ]
   end
 
-  def aliases do
-    [
-      bench: &bench/1
-    ]
-  end
-
-  defp bench(args) do
-    Mix.Task.run("run", args)
-  end
-
   # Run "mix help compile.app" to learn about applications.
-  def application do
-    [
-      extra_applications: [:logger]
-    ]
-  end
+  def application, do: []
 
   def elixirc_paths(:test), do: ["lib", "test"]
   def elixirc_paths(_), do: ["lib"]
@@ -63,16 +47,16 @@ defmodule Honeybee.MixProject do
       {:benchee_html, "~> 0.4", only: :test},
       {:phoenix, "~> 1.4.0", only: :test},
       {:dialyxir, "~> 0.4", only: :test},
-      {:ex_doc, "~> 0.19", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.19", only: :dev}
     ]
   end
 
   defp package do
     [
-      maintainers: ["Apiologist"],
+      maintainers: ["apiologist"],
       licenses: ["GNU"],
       links: %{github: "https://github.com/apiologist/honeybee"},
-      files: ~w(lib mix.exs README.md .formatter.exs)
+      files: ~w(lib mix.exs README.md)
     ]
   end
 end
