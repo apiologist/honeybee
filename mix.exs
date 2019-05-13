@@ -9,18 +9,9 @@ defmodule Honeybee.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       aliases: [],
       start_permanent: Mix.env() == :prod,
+      build_embedded: Mix.env() == :prod,
       deps: deps(),
-      docs: [
-        main: "introduction",
-        extra_section: "GUIDES",
-        formatters: ["html"],
-        groups_for_modules: [],
-        extras: [
-          "guides/honeybee/introduction.md",
-          "guides/honeybee/routing.md"
-        ],
-        groups_for_extras: [Honeybee: ~r/guides\/honeybee\/.?/]
-      ],
+      docs: docs(),
       package: package(),
       dialyzer: [
         flags: [:unmatched_returns, :error_handling, :race_conditions, :underspecs]
@@ -48,6 +39,20 @@ defmodule Honeybee.MixProject do
       {:phoenix, "~> 1.4.0", only: :test},
       {:dialyxir, "~> 0.4", only: :test},
       {:ex_doc, "~> 0.19", only: :dev}
+    ]
+  end
+
+  defp docs do
+    [
+      main: "introduction",
+      extra_section: "GUIDES",
+      formatters: ["html"],
+      groups_for_modules: [],
+      extras: [
+        "guides/honeybee/introduction.md",
+        "guides/honeybee/routing.md"
+      ],
+      groups_for_extras: [Honeybee: ~r/guides\/honeybee\/.?/]
     ]
   end
 
