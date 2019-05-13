@@ -5,7 +5,14 @@ defmodule Honeybee.Compiler do
       plugs
       |> Enum.reverse()
       |> Enum.map(&Honeybee.Plug.as_plug/1)
-      |> Macro.prewalk(&Macro.expand_once(&1, env))
+      |> Enum.map(fn
+        {fun, opts, guards} ->
+          {
+            Macro.expand(fun, env),
+            Macro.prewalk(opts, &Macro.expand(&1, env)),
+            guards
+          }
+      end)
 
     {conn, ast} = Plug.Builder.compile(env, plug_pipeline, [])
 
