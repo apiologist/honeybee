@@ -54,9 +54,9 @@ defmodule Honeybee.MixProject do
   defp package do
     [
       maintainers: ["apiologist"],
-      licenses: ["GNU"],
+      licenses: ["MIT"],
       links: %{github: "https://github.com/apiologist/honeybee"},
-      files: ~w(lib mix.exs README.md)
+      files: ~w(lib mix.exs README.md LICENSE)
     ]
   end
 end
