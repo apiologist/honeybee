@@ -1,3 +1,7 @@
+# Disclaimer
+Honeybee is currently in a very early stage. Use in production environments is not advised.
+Report any issues to the [IssueTracker](https://github.com/apiologist/honeybee/)
+
 # What is Honeybee?
 Honeybee is a router intended for RESTful APIs. It's built on [Plug](https://hexdocs.pm/plug/readme.html).
 
@@ -16,9 +20,9 @@ Honeybee is one of the fastest routers in the Elixir language, easily surpassing
 
 A benchmark measuring the performance of routing 10 000 requests on 100 route definitions is shown below.
 
-![alt text](https://github.com/sfinnman/honeybee/blob/simon/initial-commit/guides/assets/ips_plot.png?raw=true "Benchmark of runs per second for 10 000 requests on 100 routes")
+![alt text](https://github.com/apiologist/honeybee/guides/assets/ips_plot.png?raw=true "Benchmark of runs per second for 10 000 requests on 100 routes")
 
-![alt text](https://github.com/sfinnman/honeybee/blob/simon/initial-commit/guides/assets/runtime_plot.png?raw=true "Benchmark of run time for 10 000 requests on 100 routes")
+![alt text](https://github.com/apiologist/honeybee/guides/assets/assets/runtime_plot.png?raw=true "Benchmark of run time for 10 000 requests on 100 routes")
 
 # Honeybee
 
