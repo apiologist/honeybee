@@ -1,4 +1,4 @@
-defmodule Honeybee.Pipeline.Validator do
+defmodule Honeybee.Pipe.Validator do
   @moduledoc false
   use Honeybee.Utils.Types
 
@@ -12,7 +12,7 @@ defmodule Honeybee.Pipeline.Validator do
       !is_atom(name) ->
         raise TypeError,
           env: env,
-          message: "Honeybee.pipeline: expected name to be atom, got: #{Macro.to_string(name)}"
+          message: "Honeybee.pipe: expected name to be atom, got: #{Macro.to_string(name)}"
 
       true ->
         :ok

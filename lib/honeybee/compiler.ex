@@ -1,7 +1,11 @@
 defmodule Honeybee.Compiler do
+  defmodule CompileError do
+    use Honeybee.Utils.Error
+  end
+
   @moduledoc false
-  def compile_pipeline(env, %Honeybee.Pipeline{name: name, plugs: plugs, line: line}) do
-    plug_pipeline =
+  def compile_pipe(env, %Honeybee.Pipe{name: name, plugs: plugs, line: line}) do
+    plug_pipe =
       plugs
       |> Enum.reverse()
       |> Enum.map(&Honeybee.Plug.as_plug/1)
@@ -14,16 +18,16 @@ defmodule Honeybee.Compiler do
           }
       end)
 
-    {conn, ast} = Plug.Builder.compile(env, plug_pipeline, [])
+    {conn, ast} = Plug.Builder.compile(env, plug_pipe, [])
 
-    compiled_pipeline =
+    compiled_pipe =
       quote do
-        def pipe_through(unquote(conn), unquote(name)) do
+        def using(unquote(conn), unquote(name)) do
           unquote(ast)
         end
       end
 
-    set_line(compiled_pipeline, line)
+    set_line(compiled_pipe, line)
   end
 
   def compile_route(
@@ -41,9 +45,29 @@ defmodule Honeybee.Compiler do
         opts: Macro.expand(route.opts, env)
     }
 
+    method = case route.type do
+      :forward -> :call
+      :match -> route.method
+    end
+
+    %_{ module: module } = route
+
+    err_msg = "Expected #{inspect(route.module)} to export function #{method}/2"
+
+    case env.module do
+      ^module ->
+        if !Module.defines?(module, {method, 2}) do
+          raise CompileError, env: env, line: route.line, message: err_msg
+        end
+      _ ->
+        if !function_exported?(module, method, 2) do
+          raise CompileError, env: env, line: route.line, message: err_msg
+        end
+    end
+
     uri =
       case type do
-        :forward -> path(scope) <> path <> ":*forward_route"
+        :forward -> path(scope) <> path <> "/:*forward_route"
         :match -> path(scope) <> path
       end
 
@@ -56,10 +80,10 @@ defmodule Honeybee.Compiler do
     {pattern, params} = Honeybee.Utils.Path.compile(uri)
 
     compiled_params = compile_params(params)
-    compiled_pipe_through = compile_pipe_through(scope)
+    compiled_pipes = compile_pipes(scope)
     compiled_call = compile_call(route)
 
-    components = compiled_pipe_through ++ [compiled_call]
+    components = compiled_pipes ++ [compiled_call]
     compiled_block = concat_compiled(components)
 
     compiled_route =
@@ -91,12 +115,12 @@ defmodule Honeybee.Compiler do
     quote(do: unquote(conn()) = %Plug.Conn{unquote(conn()) | path_params: unquote(params)})
   end
 
-  defp compile_pipe_through(scope) do
+  defp compile_pipes(scope) do
     scope
     |> Enum.reverse()
-    |> Enum.flat_map(& &1.pipe_through)
-    |> Enum.flat_map(& &1.pipelines)
-    |> Enum.map(&quote(do: pipe_through(unquote(conn()), unquote(&1))))
+    |> Enum.flat_map(& &1.using)
+    |> Enum.flat_map(& &1.pipes)
+    |> Enum.map(&quote(do: using(unquote(conn()), unquote(&1))))
   end
 
   defp compile_call(%Honeybee.Route{
@@ -107,7 +131,7 @@ defmodule Honeybee.Compiler do
        }) do
     err_msg =
       "Expected " <>
-        inspect(module) <> "." <> inspect(method) <> "/2 to return a connection, got: "
+        inspect(module) <> "." <> Atom.to_string(method) <> "/2 to return a connection, got: "
 
     quote do
       case unquote(module).unquote(method)(unquote(conn()), unquote(opts)) do

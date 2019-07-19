@@ -23,15 +23,16 @@ defmodule Honeybee do
   alias Honeybee.Plug
   alias Honeybee.Scope
   alias Honeybee.Route
-  alias Honeybee.Pipeline
-  alias Honeybee.PipeThrough
+  alias Honeybee.Pipe
+  alias Honeybee.Using
   alias Honeybee.Compiler
+  alias Plug
 
   defmacro __using__(_ \\ []) do
     env = __CALLER__
     Scope.init(env)
     Route.init(env)
-    Pipeline.init(env)
+    Pipe.init(env)
 
     quote do
       import Honeybee
@@ -114,9 +115,9 @@ defmodule Honeybee do
     Route.create(__CALLER__, :forward, scope, nil, path, module, nil, opts)
   end
 
-  @spec pipeline(atom(), term()) :: :ok
-  defmacro pipeline(name, do: block) do
-    Pipeline.create(__CALLER__, name, block)
+  @spec pipe(atom(), term()) :: :ok
+  defmacro pipe(name, do: block) do
+    Pipe.create(__CALLER__, name, block)
   end
 
   @spec plug(atom() | Alias.t(), keyword()) :: Honeybee.Plug.t()
@@ -124,35 +125,35 @@ defmodule Honeybee do
     Plug.create(__CALLER__, plug, opts, true)
   end
 
-  @spec pipe_through([atom]) :: :ok
-  defmacro pipe_through(pipelines) when is_list(pipelines) do
-    pipe_through = PipeThrough.create(__CALLER__, pipelines)
-    Scope.pipe_through(__CALLER__, pipe_through)
+  @spec using([atom]) :: :ok
+  defmacro using(pipes) when is_list(pipes) do
+    using = Using.create(__CALLER__, pipes)
+    Scope.using(__CALLER__, using)
   end
 
-  @spec pipe_through(atom) :: :ok
-  defmacro pipe_through(pipelines) do
-    pipe_through = PipeThrough.create(__CALLER__, [pipelines])
-    Scope.pipe_through(__CALLER__, pipe_through)
+  @spec using(atom) :: :ok
+  defmacro using(pipes) do
+    using = Using.create(__CALLER__, [pipes])
+    Scope.using(__CALLER__, using)
   end
 
   @spec __before_compile__(Macro.Env.t()) :: Macro.t()
   defmacro __before_compile__(env) do
-    pipelines = Pipeline.get(env)
+    pipes = Pipe.get(env)
     routes = Route.get(env)
 
-    compiled_pipelines =
-      pipelines |> Enum.reverse() |> Enum.map(&Compiler.compile_pipeline(env, &1))
+    compiled_pipes =
+      pipes |> Enum.reverse() |> Enum.map(&Compiler.compile_pipe(env, &1))
 
     compiled_routes = routes |> Enum.reverse() |> Enum.map(&Compiler.compile_route(env, &1))
 
     unmatched_capture =
       quote do
-        def dispatch(_, pattern) do
-          raise "No route matching " <> Enum.join(pattern, "/")
+        def dispatch(%Elixir.Plug.Conn{method: method}, pattern) do
+          raise "No matching route for request: " <> method <> " /" <> Enum.join(pattern, "/")
         end
       end
 
-    compiled_pipelines ++ compiled_routes ++ [unmatched_capture]
+    compiled_pipes ++ compiled_routes ++ [unmatched_capture]
   end
 end

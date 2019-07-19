@@ -2,33 +2,33 @@ defmodule Honeybee.Scope do
   @moduledoc false
   @attr_scope :__honeybee_scope__
 
-  defstruct [:line, :path, :pipe_through]
+  defstruct [:line, :path, :using]
 
   @type t :: %Honeybee.Scope{
           line: integer(),
           path: String.t(),
-          pipe_through: [Honeybee.PipeThrough.t()]
+          using: [Honeybee.Using.t()]
         }
 
   @spec init(Macro.Env.t()) :: :ok
   def init(%Macro.Env{} = env) do
     Module.put_attribute(env.module, @attr_scope, [
-      %Honeybee.Scope{path: "/", pipe_through: [], line: env.line}
+      %Honeybee.Scope{path: "/", using: [], line: env.line}
     ])
   end
 
   @spec create(Macro.Env.t(), String.t(), Macro.t()) :: :ok
   def create(%Macro.Env{} = env, path, block) do
     Honeybee.Scope.Validator.validate_types!(env, path, block)
-    push(env, %Honeybee.Scope{line: env.line, path: path, pipe_through: []})
+    push(env, %Honeybee.Scope{line: env.line, path: path, using: []})
     Honeybee.Utils.Resolver.resolve(env, block)
     popn(env)
   end
 
-  @spec pipe_through(Macro.Env.t(), Honeybee.PipeThrough.t()) :: :ok
-  def pipe_through(%Macro.Env{} = env, pipe_through) do
+  @spec using(Macro.Env.t(), Honeybee.Using.t()) :: :ok
+  def using(%Macro.Env{} = env, using) do
     scope = pop(env)
-    push(env, %Honeybee.Scope{scope | pipe_through: [pipe_through | scope.pipe_through]})
+    push(env, %Honeybee.Scope{scope | using: [using | scope.using]})
   end
 
   @spec in_scope?(Macro.Env.t()) :: true | false

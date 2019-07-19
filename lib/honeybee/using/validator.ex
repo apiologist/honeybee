@@ -1,4 +1,4 @@
-defmodule Honeybee.PipeThrough.Validator do
+defmodule Honeybee.Using.Validator do
   @moduledoc false
   use Honeybee.Utils.Types
 
@@ -7,14 +7,14 @@ defmodule Honeybee.PipeThrough.Validator do
   end
 
   @spec validate_types!(Macro.Env.t(), [atom()]) :: :ok
-  def validate_types!(env, pipelines) do
+  def validate_types!(env, pipes) do
     cond do
-      !is_list(pipelines) ->
+      !is_list(pipes) ->
         raise TypeError,
           env: env,
           message:
-            "Honeybee.pipe_through: expected pipelines to be a list, got: #{
-              Macro.to_string(pipelines)
+            "Honeybee.using: expected pipes to be a list, got: #{
+              Macro.to_string(pipes)
             }"
 
       true ->
