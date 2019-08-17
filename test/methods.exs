@@ -6,6 +6,10 @@ defmodule Honeybee.Test.Methods do
 
     defmodule Routes do
       import Plug.Conn
+
+      def init(opts), do: opts
+      def call(conn, opts), do: apply(__MODULE__, opts, [conn, opts])
+
       def head(conn, _opts), do: resp(conn, 200, "head")      
       def get(conn, _opts), do: resp(conn, 200, "get")
       def put(conn, _opts), do: resp(conn, 200, "put")
@@ -17,15 +21,15 @@ defmodule Honeybee.Test.Methods do
       def match(conn, _opts), do: resp(conn, 200, "match")
     end
 
-    head "/test", Routes, :head
-    get "/test", Routes, :get
-    put "/test", Routes, :put
-    post "/test", Routes, :post
-    patch "/test", Routes, :patch
-    connect "/test", Routes, :connect
-    options "/test", Routes, :options
-    delete "/test", Routes, :delete
-    match _, "/test/match", Routes, :match
+    head "/test", do: plug Routes, :head
+    get "/test", do: plug Routes, :get
+    put "/test", do: plug Routes, :put
+    post "/test", do: plug Routes, :post
+    patch "/test", do: plug Routes, :patch
+    connect "/test", do: plug Routes, :connect
+    options "/test", do: plug Routes, :options
+    delete "/test", do: plug Routes, :delete
+    match _, "/test/match", do: plug Routes, :match
   end
 
   test "head" do
@@ -120,7 +124,7 @@ defmodule Honeybee.Test.Methods do
 
   describe "Invalid input will cause TypeErrors during compilation" do
     test "path must be string" do
-      assert_raise Honeybee.Route.Validator.TypeError, fn ->
+      assert_raise CompileError, fn ->
         defmodule PathErrorRouter do
           use Honeybee
           defmodule Routes do
@@ -133,7 +137,7 @@ defmodule Honeybee.Test.Methods do
     end
 
     test "Target module must be a module" do
-      assert_raise Honeybee.Route.Validator.TypeError, fn ->
+      assert_raise CompileError, fn ->
         defmodule ModuleErrorRouter do
           use Honeybee
           defmodule Routes do
@@ -146,7 +150,7 @@ defmodule Honeybee.Test.Methods do
     end
 
     test "Target function must be an atom" do
-      assert_raise Honeybee.Route.Validator.TypeError, fn ->
+      assert_raise CompileError, fn ->
         defmodule FunctionErrorRouter do
           use Honeybee
           defmodule Routes do
@@ -159,7 +163,7 @@ defmodule Honeybee.Test.Methods do
     end
 
     test "Options must be a list" do
-      assert_raise Honeybee.Route.Validator.TypeError, fn ->
+      assert_raise CompileError, fn ->
         defmodule OptionsErrorRouter do
           use Honeybee
           defmodule Routes do

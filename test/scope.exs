@@ -7,6 +7,9 @@ defmodule Honeybee.Test.Scope do
     defmodule Routes do
       import Plug.Conn
 
+      def init(opts), do: opts
+      def call(conn, opts), do: apply(__MODULE__, opts, [conn, opts])
+
       def ok(conn, _opts), do: resp(conn, 200, "OK")
       def test3(conn, _opts), do: resp(conn, 200, "TEST3")
     end
@@ -22,15 +25,15 @@ defmodule Honeybee.Test.Scope do
     using :test_global
     scope do
       using :test1
-      get "/test1", Routes, :ok
+      get "/test1", do: plug Routes, :ok
     end
 
     scope "/test1" do
       using :test2
-      get "/test2", Routes, :ok
+      get "/test2", do: plug Routes, :ok
       
       scope "/test2" do
-        get "/test3", Routes, :test3
+        get "/test3", do: plug Routes, :test3
       end
     end
   end
@@ -78,7 +81,7 @@ defmodule Honeybee.Test.Scope do
 
   describe "TypeErrors" do
     test "Scopes must scope a string" do
-      assert_raise Honeybee.Scope.Validator.TypeError, fn ->
+      assert_raise FunctionClauseError, fn ->
         defmodule InvalidScopeStringRouter do
           use Honeybee
 
