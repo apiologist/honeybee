@@ -1,16 +1,7 @@
-# Routing
-The Honeybee router syntax is very similar to the router of phoenix apart from some key things.
+# Getting started
 
- - Honeybee doesn't assume the names of methods in request handlers, giving the developer the freedom to name handler methods however the developer sees fit.
- - Honeybee doesn't force imports down your throat. Maybe you want to name your functions whatever you like.
- - Honeybee has much stronger compile time error checking, letting developers spot routing errors early.
- - Honeybee is 15x faster than the Phoenix router and 7x faster than the Plug router.
- - Honeybee provides 0 magic apart from routing, it does not assume to know what JSON parser is best for your needs.
- - Honeybee is less than 1 MB in size, which is more than 60x smaller than Phoenix.
- - Honeybee compiles 6x faster than Phoenix and more than 30x faster than plug.
-
-## Getting started
-Start by adding the following dependencies to your app
+## Installation
+Honeybee is installed by adding it to the dependencies of the mix.exs:
 
 ```
 {
@@ -19,8 +10,10 @@ Start by adding the following dependencies to your app
 }
 ```
 
-The `:plug_cowboy` dependency has Cowboy in it, which is an http/https server.
-Lets start Cowboy with an Api plug.
+`:plug_cowboy` includes both plug and Cowboy. Cowboy is a popular webserver, used by most elixir api's.
+
+## Setting up the webserver
+The webserver is part of your application, and serves as an entrypoint to the application.
 
 ```
 defmodule MyApp do
@@ -37,6 +30,11 @@ defmodule MyApp do
 end
 ```
 
+## Setting up the api request pipeline
+Incoming requests will processed by the plug specified in the child_spec of the webserver.
+Here we use a `Plug.Builder` to build a simple pipeline that will process all incoming requests.
+At the end we pipe the connection to the router.
+
 ```
 defmodule MyApp.MyApi do
   use Plug.Builder
@@ -49,20 +47,192 @@ defmodule MyApp.MyApi do
 end
 ```
 
+## Setting up the router
+In the router we provide a basic route scheme that will respond 404 to all incoming requests.
+
 ```
 defmodule MyApp.MyApi.MyRouter do
   use Honeybee
 
-  match _, MyApp.MyApi.NotFoundHandler, :not_found
-end
-```
-
-```
-defmodule MyApp.MyApi.NotFoundHandler do
-  def not_found(conn, []) do
+  match _, "*", do: plug :not_found
+  
+  def not_found(conn, _opts) do
     Plug.Conn.resp(conn, 404, "")
   end
 end
 ```
 
+## Adding the first route
+The app should respond `"hello world"` to all requests on the path `"/knock/knock"`.
+We add a route to provide this functionality
+
+```
+defmodule MyApp.MyApi.MyRouter do
+  use Honeybee
+
+  match _, "/knock/knock", do: plug :hello_world
+
+  match _, "*", do: plug :not_found
+
+  def hello_world(conn, _opts), do: Plug.Conn.resp(conn, 200, "hello world")
+  def not_found(conn, _opts), do: Plug.Conn.resp(conn, 404, "")
+end
+```
+
+## Creating a route module
+Putting route logic in the router can become overwhelming after a while.
+When this approach is no longer viable we might want to separate responsibility of routing and handling.
+We can use a simple pattern to create a module that handles connections for us.
+
+```
+defmodule MyApp.MyApi.MyFirstRouteHandler do
+  def init(opts), do: Keyword.split(opts, [:handler])
+  def call(conn, {[handler: method], opts}) do
+    apply(__MODULE__, method, [conn, opts])
+  end
+
+  def hello_world(conn, _opts) do
+    Plug.Conn.resp(conn, 200, "hello_world")
+  end
+end
+```
+
+Our router will now look like this
+
+```
+defmodule MyApp.MyApi.MyRouter do
+  use Honeybee
+
+  match _, "/knock/knock", do: plug MyApp.MyApi.MyFirstRouteHandler, handler: :hello_world
+
+  match _, "*", do: plug :not_found
+  def not_found(conn, _opts), do: Plug.Conn.resp(conn, 404, "")
+end
+```
+
+## Adding a body parser
+Many handlers will need access to the body of the request.
+Plug has a pluggable module which can be added to the request pipeline in order to parse request bodies.
+
+```
+defmodule MyApp.MyApi.MyRouter do
+  use Honeybee
+
+  pipe :body_parser do
+    plug Plug.Parsers, parsers: [:json], pass: ["application/json"], json_decoder: Poison
+  end
+
+  using :body_parser
+
+  match _, "/knock/knock", do: plug MyApp.MyApi.MyFirstRouteHandler, handler: :hello_world
+
+  match _, "*", do: plug :not_found
+  def not_found(conn, _opts), do: Plug.Conn.resp(conn, 404, "")
+end
+```
+
+## Adding an admin scope
+Some routes should not be accessed by unauthorized users.
+In this example we will add a scope which validates requests on all routes.
+
+```
+defmodule MyApp.MyApi.MyRouter do
+  use Honeybee
+
+  pipe :body_parser do
+    plug Plug.Parsers, parsers: [:json], pass: ["application/json"], json_decoder: Poison
+  end
+
+  pipe :authorization do
+    plug Authorization, level: :admin
+  end
+
+  using :body_parser
+
+  scope do
+    using :authorization
+
+    get "/users", do: plug MyApp.MyApi.MyFirstRouteHandler, handler: :get_users
+  end
+
+  match _, "/knock/knock", do: plug MyApp.MyApi.MyFirstRouteHandler, handler: :hello_world
+
+  match _, "*", do: plug :not_found
+  def not_found(conn, _opts), do: Plug.Conn.resp(conn, 404, "")
+end
+```
+
+## Route specific plugs
+Route specific plugs can be added to plug block of the route.
+This can be seen below in the `"knock/knock"` route.
+
+```
+defmodule MyApp.MyApi.MyRouter do
+  use Honeybee
+
+  pipe :body_parser do
+    plug Plug.Parsers, parsers: [:json], pass: ["application/json"], json_decoder: Poison
+  end
+
+  pipe :authorization do
+    plug Authorization, level: :admin
+  end
+
+  using :body_parser
+
+  scope do
+    using :authorization
+
+    get "/users", do: plug MyApp.MyApi.MyFirstRouteHandler, handler: :get_users
+  end
+
+  match _, "/knock/knock", do
+    plug MyApp.MyApi.Validators, handler: :hello_world
+    plug MyApp.MyApi.MyFirstRouteHandler, handler: :hello_world
+  end
+
+  match _, "*", do: plug :not_found
+  def not_found(conn, _opts), do: Plug.Conn.resp(conn, 404, "")
+end
+```
+
+## Forwarding to another router
+Forwarding is an important part of routing.
+This behaviour is modelled in Honeybee using the `:forward_with` option to a router.
+
+Below is an example of forwarding in a Honeybee router.
+
+```
+defmodule MyApp.MyApi.MyRouter do
+  use Honeybee
+
+  pipe :body_parser do
+    plug Plug.Parsers, parsers: [:json], pass: ["application/json"], json_decoder: Poison
+  end
+
+  pipe :authorization do
+    plug Authorization, level: :admin
+  end
+
+  match _, "/forward/*forward_path" do
+    plug MySecondRouter, forward_with: "forward_path"
+  end
+
+  using :body_parser
+
+  scope do
+    using :authorization
+
+    get "/users", do: plug MyApp.MyApi.MyFirstRouteHandler, handler: :get_users
+  end
+
+  match _, "/knock/knock", do
+    plug MyApp.MyApi.Validators, handler: :hello_world
+    plug MyApp.MyApi.MyFirstRouteHandler, handler: :hello_world
+  end
+
+  match _, "*", do: plug :not_found
+  def not_found(conn, _opts), do: Plug.Conn.resp(conn, 404, "")
+end
+```
 

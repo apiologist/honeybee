@@ -7,6 +7,9 @@ defmodule Honeybee.Test.Pipe do
     defmodule Routes do
       import Plug.Conn
 
+      def init(opts), do: opts
+      def call(conn, opts), do: apply(__MODULE__, opts, [conn, opts])
+
       def ok(conn, _opts), do: resp(conn, 200, "OK")
     end
 
@@ -32,19 +35,19 @@ defmodule Honeybee.Test.Pipe do
     pipe :bad_pipe, do: plug Middlewares, apply: :bad_pipe
 
     using :test
-    get "/", Routes, :ok
+    get "/", do: plug Routes, :ok
 
     using :nop
-    get "/test", Routes, :ok
+    get "/test", do: plug Routes, :ok
 
     scope do
       using :raise
-      get "/test/raise", Routes, :ok
+      get "/test/raise", do: plug Routes, :ok
     end
 
     scope do
       using :bad_pipe
-      get "/test/bad_pipe", Routes, :ok
+      get "/test/bad_pipe", do: plug Routes, :ok
     end
   end
 
@@ -89,7 +92,7 @@ defmodule Honeybee.Test.Pipe do
 
   describe "Type Validations" do
     test "Pipe name must be an atom" do
-      assert_raise Honeybee.Pipe.Validator.TypeError, fn ->
+      assert_raise FunctionClauseError, fn ->
         defmodule BadNameRouter do
           use Honeybee
 

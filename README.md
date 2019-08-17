@@ -1,16 +1,15 @@
 # Disclaimer
-Honeybee is currently in a very early stage. Use in production environments is not advised.
+Honeybee is currently in a development stage. Use in production environments is not advised.
 Report any issues to the [IssueTracker](https://github.com/apiologist/honeybee/)
 
 # What is Honeybee?
-Honeybee is a router intended for RESTful APIs. It's built on [Plug](https://hexdocs.pm/plug/readme.html).
+Honeybee is a router intended for APIs. It's built on [Plug](https://hexdocs.pm/plug/readme.html).
 
 Honeybee's key features include:
  - Feature rich routing.
  - Strong compile time validation.
  - Detailed, descriptive errors.
- - Extreme speed.
- - Superior compile time performance.
+ - Performance.
  - Easy, DRY syntax.
  - Minimum bloat.
  - Unopinionated.
@@ -21,7 +20,7 @@ Honeybee can be installed by adding `honeybee` to your list of dependencies in `
  ```elixir	
 def deps do	
   [	
-    {:honeybee, "~> 0.0.2"}	
+    {:honeybee, "~> 0.1.0"}	
   ]	
 end	
 ```
