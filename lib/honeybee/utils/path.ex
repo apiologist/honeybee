@@ -36,7 +36,7 @@ defmodule Honeybee.Utils.Path do
   def compile_pattern(path) do
     path
     |> String.split("/", trim: true)
-    |> Enum.map(&String.split(&1, ":"))
+    |> Enum.map(&String.split(&1, ~r/(?=[\:\*])/))
     |> Enum.reduce([], fn
       ["", "*" <> glob], acc ->
         acc ++ var(glob)
@@ -44,10 +44,10 @@ defmodule Honeybee.Utils.Path do
       [static, "*" <> glob], acc ->
         acc ++ [merge(static, var("_" <> glob))] ++ var(glob)
 
-      ["", dynamic], acc ->
+      ["", ":" <> dynamic], acc ->
         acc ++ [var(dynamic)]
 
-      [static, dynamic], acc ->
+      [static, ":" <> dynamic], acc ->
         acc ++ [merge(static, var(dynamic))]
 
       [static], acc ->
@@ -59,7 +59,7 @@ defmodule Honeybee.Utils.Path do
   def compile_params(path) do
     path
     |> String.split("/", trim: true)
-    |> Enum.map(&String.split(&1, ":"))
+    |> Enum.map(&String.split(&1, ~r/(?=[\:\*])/))
     |> Enum.reduce(%{}, fn
       ["", "*" <> glob], var_map ->
         Map.merge(var_map, %{glob => var(glob)})
@@ -67,10 +67,10 @@ defmodule Honeybee.Utils.Path do
       [_, "*" <> glob], var_map ->
         Map.merge(var_map, %{glob => [var("_" <> glob) | var(glob)]})
 
-      [_, dynamic], var_map ->
+      [_, ":" <> dynamic], var_map ->
         Map.merge(var_map, %{dynamic => var(dynamic)})
 
-      _, var_map ->
+      [_], var_map ->
         var_map
     end)
     |> Macro.escape(unquote: true)
