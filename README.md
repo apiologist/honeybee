@@ -20,7 +20,7 @@ Honeybee can be installed by adding `honeybee` to your list of dependencies in `
  ```elixir	
 def deps do	
   [	
-    {:honeybee, "~> 0.1.0"}	
+    {:honeybee, "~> 0.1.1"}	
   ]	
 end	
 ```
