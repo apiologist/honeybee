@@ -18,18 +18,14 @@ defmodule Honeybee.Test.Scope do
     def test1(conn, _opts), do: Plug.Conn.put_private(conn, :test1, :test1)
     def test2(conn, _opts), do: Plug.Conn.put_private(conn, :test2, :test2)
 
-    pipe :test_global, do: plug :test_global
-    pipe :test1, do: plug :test1
-    pipe :test2, do: plug :test2
-
-    using :test_global
+    plug :test_global
     scope do
-      using :test1
+      plug :test1
       get "/test1", do: plug Routes, :ok
     end
 
     scope "/test1" do
-      using :test2
+      plug :test2
       get "/test2", do: plug Routes, :ok
       
       scope "/test2" do

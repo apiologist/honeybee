@@ -29,29 +29,24 @@ defmodule Honeybee do
   ```
 
   Honeybee provides routing capabilities to Plug apps.
-  It uses the concept of plug pipelines to provide a useful api to developers.
-  Named plug pipelines can be declared using the `pipe/2` macro,
-  and included in scoped pipelines with `using/1`.
-  Scopes can be declared with `scope/2`.
-
-  This allows each route to process a unique pipeline,
-  in a way which is easy to read, easy to understand and easy to use.
+  Honeybee heavily relies on the concept of plug pipelines,
+  in order to provide a useful and intuitive api to developers.
   """
   use Honeybee.Utils.Types
 
-  @routes  :__honeybee_routes__
-  @scope   :__honeybee_scope__
-  @pipes   :__honeybee_pipes__
-  @context :__honeybee_context__
-  @opts    :__honeybee_opts__
+  @routes       :__honeybee_routes__
+  @scope        :__honeybee_scope__
+  @compositions :__honeybee_compositions__
+  @context      :__honeybee_context__
+  @opts         :__honeybee_opts__
 
   defmacro __using__(opts \\ []) do
     env = __CALLER__
     Module.put_attribute(env.module, @opts, opts)
     Module.put_attribute(env.module, @context, :root)
-    Module.put_attribute(env.module, @scope, [[line: env.line, path: "", using: []]])
+    Module.put_attribute(env.module, @scope, [[line: env.line, path: "", plugs: []]])
     Module.register_attribute(env.module, @routes, accumulate: true)
-    Module.register_attribute(env.module, @pipes, accumulate: true)
+    Module.register_attribute(env.module, @compositions, accumulate: true)
 
     quote do
       import Honeybee
@@ -74,7 +69,8 @@ defmodule Honeybee do
 
   @spec __before_compile__(Macro.Env.t()) :: Macro.t()
   defmacro __before_compile__(env) do
-    compiled_pipes = compile_pipes(env)
+    compiled_compositions = compile_compositions(env)
+
     compiled_routes = compile_routes(env)
     unmatched_capture =
       quote do
@@ -83,7 +79,7 @@ defmodule Honeybee do
         end
       end
 
-    compiled_pipes ++ compiled_routes ++ [unmatched_capture]
+    compiled_compositions ++ compiled_routes ++ [unmatched_capture]
   end
 
   defp compile_routes(env) do
@@ -92,15 +88,13 @@ defmodule Honeybee do
     |> Enum.map(fn route ->
       scope_stack = Keyword.fetch!(route, :scope)
 
-      pipes = scope_stack
-        |> Enum.flat_map(&Keyword.fetch!(&1, :using))
-        |> Enum.map(&{:call_pipe, &1, true})
+      scope_plugs = scope_stack
+        |> Enum.flat_map(&Keyword.fetch!(&1, :plugs))
 
-      plugs = Keyword.fetch!(route, :plugs)
-
+      route_plugs = Keyword.fetch!(route, :plugs)
       {conn, compiled_pipeline} = Elixir.Plug.Builder.compile(
         env,
-        plugs ++ pipes,
+        route_plugs ++ scope_plugs,
         Module.get_attribute(env.module, @opts)
       )
 
@@ -122,20 +116,20 @@ defmodule Honeybee do
     end)
   end
 
-  defp compile_pipes(env) do
-    Module.get_attribute(env.module, @pipes)
-    |> Enum.map(fn pipe ->
-      name = Keyword.fetch!(pipe, :name)
-      plugs = Keyword.fetch!(pipe, :plugs)
+  defp compile_compositions(env) do
+    Module.get_attribute(env.module, @compositions)
+    |> Enum.map(fn composition ->
+      name = Keyword.fetch!(composition, :name)
+      plugs = Keyword.fetch!(composition, :plugs)
       
       {conn, compiled_plugs} = Elixir.Plug.Builder.compile(
         env,
         plugs,
-        Module.get_attribute(env.module, @opts)
+        [{:init_mode, :runtime} | Module.get_attribute(env.module, @opts)]
       )
       
-      quote line: Keyword.fetch!(pipe, :line) do
-        defp call_pipe(unquote(conn), unquote(name)) do
+      quote line: Keyword.fetch!(composition, :line) do
+        defp unquote(name)(unquote(conn), unquote({:opts, [], nil})) do
           unquote(compiled_plugs)
         end
       end
@@ -145,7 +139,7 @@ defmodule Honeybee do
   @doc """
   An alias for `match "HEAD"`
   """
-  @spec head(String.t(), term()) :: :ok
+  @spec head(String.t(), term()) :: nil
   defmacro head(path, do: block) when is_bitstring(path) do
     make_route(__CALLER__, "HEAD", path, block)
     nil
@@ -154,7 +148,7 @@ defmodule Honeybee do
   @doc """
   An alias for `match "GET"`
   """
-  @spec get(String.t(), term()) :: :ok
+  @spec get(String.t(), term()) :: nil
   defmacro get(path, do: block) when is_bitstring(path) do
     make_route(__CALLER__, "GET", path, block)
     nil
@@ -163,7 +157,7 @@ defmodule Honeybee do
   @doc """
   An alias for `match "POST"`
   """
-  @spec post(String.t(), term()) :: :ok
+  @spec post(String.t(), term()) :: nil
   defmacro post(path, do: block) when is_bitstring(path) do
     make_route(__CALLER__, "POST", path, block)
     nil
@@ -172,7 +166,7 @@ defmodule Honeybee do
   @doc """
   An alias for `match "PUT"`
   """
-  @spec put(String.t(), term()) :: :ok
+  @spec put(String.t(), term()) :: nil
   defmacro put(path, do: block) when is_bitstring(path) do
     make_route(__CALLER__, "PUT", path, block)
     nil
@@ -181,7 +175,7 @@ defmodule Honeybee do
   @doc """
   An alias for `match "PATCH"`
   """
-  @spec patch(String.t(), term()) :: :ok
+  @spec patch(String.t(), term()) :: nil
   defmacro patch(path, do: block) when is_bitstring(path) do
     make_route(__CALLER__, "PATCH", path, block)
     nil
@@ -190,7 +184,7 @@ defmodule Honeybee do
   @doc """
   An alias for `match "CONNECT"`
   """
-  @spec connect(String.t(), term()) :: :ok
+  @spec connect(String.t(), term()) :: nil
   defmacro connect(path, do: block) when is_bitstring(path) do
     make_route(__CALLER__, "CONNECT", path, block)
     nil
@@ -199,7 +193,7 @@ defmodule Honeybee do
   @doc """
   An alias for `match "OPTIONS"`
   """
-  @spec options(String.t(), term()) :: :ok
+  @spec options(String.t(), term()) :: nil
   defmacro options(path, do: block) when is_bitstring(path) do
     make_route(__CALLER__, "OPTIONS", path, block)
     nil
@@ -208,7 +202,7 @@ defmodule Honeybee do
   @doc """
   An alias for `match "DELETE"`
   """
-  @spec delete(String.t(), term()) :: :ok
+  @spec delete(String.t(), term()) :: nil
   defmacro delete(path, do: block) when is_bitstring(path) do
     make_route(__CALLER__, "DELETE", path, block)
     nil
@@ -298,7 +292,7 @@ defmodule Honeybee do
     end
     ```
   """
-  @spec match(String.t() | Var.t(), String.t(), term()) :: :ok
+  @spec match(String.t() | Var.t(), String.t(), term()) :: nil
   defmacro match(http_method, path, plug_pipeline)
   defmacro match(method, path, do: block) when is_bitstring(path) do
     make_route(__CALLER__, method, path, block)
@@ -308,30 +302,26 @@ defmodule Honeybee do
   @doc """
   Declares an isolated scope with the provided `path`. 
 
-  Scopes are used to encapsulate a block of routes and
-  optionally provide a base path to any routes declared within.
+  Scopes are used to encapsulate and isolate any enclosed routes and plugs.
+  Calling `plug/2` inside a scope will not affect any routes declared outside that scope.
 
-  Calling `using/1` inside a scope adds pipes to the scoped pipeline.
-  Scoped pipelines run prior to route pipelines upon a match.
+  Scopes take an optional base path as the first argument.
+
+  Honeybee wraps the top level of the module in whats known as the root scope.
 
   Scopes can be nested.
 
   ## Examples
   In the following example,
   an http request `"GET"` on `"/"` will invoke `RootHandler.call/2`.
-  An http request `"GET"` on `"/api/v1"` will invoke `ExamplePlug.call/2`, `ExamplePlug2.call/2` and `V1Handler.call/2`
+  An http request `"GET"` on `"/api/v1"` will invoke `ExamplePlug.call/2` followed by `V1Handler.call/2`
 
   ```
   defmodule ExampleApp.Router do
     use Honeybee
   
-    pipe :example do
-      plug ExamplePlug
-      plug ExamplePlug2
-    end
-  
     scope "/api" do
-      using :example
+      plug ExamplePlug
   
       get "/v1" do
         plug V1Handler, call: :get
@@ -344,51 +334,40 @@ defmodule Honeybee do
   end
   ```
   """
-  @spec scope(String.t(), term()) :: :ok
+  @spec scope(String.t(), term()) :: nil
   defmacro scope(path \\ "", do: block) when is_bitstring(path) do
     make_scope(__CALLER__, path, block)
     nil
   end
 
   @doc """
-  Declares a new pipe with `name`, containing `plug_pipeline`
+  Declares a new plug composition with `name`, containing `plug_pipeline`
 
-  Plugs declared in the `plug_pipeline` are invoked in order when the pipe is part of a match.
-  A pipe can be included in a scoped pipeline with `using/1`
+  Compositions allow you to compose plug_pipelines in-place, `composition/2` uses `Plug.Builder` under the hood.
+  A compossition compiles into a private function named `name`, meaning you can plug it as any other function.
+
+  Inside compositions, the `opts` variable is available.
+  The `opts` var contains the options with which the composition was plugged.
+  Inside the composition you can manipulate the opts variable however you like.
+  
+  Currently compositions evaluate options runtime,
+  which can be very slow when composed plugs have expensive `init/1` methods.
+  In such cases, consider not using the composition method.
+
+  In a future release an option might be provided to resolve options using the `opts` at compile-time.
 
   ## Examples
   ```
-  pipe :example_pipe do
-    plug :local_example1, some_options: :opt1
+  composition :example do
+    plug :local_example1, opts
     plug PluggableExmapleModule 
   end
   ```
   """
-  defmacro pipe(name, plug_pipeline)
-  @spec pipe(atom(), term()) :: :ok
-  defmacro pipe(name, do: block) when is_atom(name) do
-    make_pipe(__CALLER__, name, block)
-    nil
-  end
-
-  @doc """
-  Adds `pipes` to the scoped pipeline.
-
-  The provided pipes should be a list of atoms, corresponding the names of the pipes.
-  A single atom can be provided as well.
-
-  Routes declared prior will not be affected by a `using/1` statement.
-  """
-  defmacro using(pipes)
-  @spec using([atom]) :: :ok
-  defmacro using(pipes) when is_list(pipes) do
-    make_using(__CALLER__, pipes)
-    nil
-  end
-
-  @spec using(atom) :: :ok
-  defmacro using(pipe) when is_atom(pipe) do
-    make_using(__CALLER__, [pipe])
+  defmacro composition(name, plug_pipeline)
+  @spec composition(atom(), term()) :: nil
+  defmacro composition(name, do: block) when is_atom(name) do
+    make_composition(__CALLER__, name, block)
     nil
   end
 
@@ -421,30 +400,35 @@ defmodule Honeybee do
     pop_scope(env)
   end
 
-  defp make_pipe(env, name, block) do
-    plugs = __expand_block__(env, :pipe, block)
+  defp make_composition(env, name, block) do
+    plugs = __expand_block__(env, :composition, block)
 
-    Module.put_attribute(env.module, @pipes, [
+    Module.put_attribute(env.module, @compositions, [
       line: env.line,
       name: name,
       plugs: plugs
     ])
   end
 
-  defp make_using(env, pipes) do
-    [top_scope | stack] = get_scope_stack(env)
-    {_, top_scope} = Keyword.get_and_update!(top_scope, :using, &{nil, Enum.reverse(pipes) ++ &1})
-
-    Module.put_attribute(env.module, @scope, [top_scope | stack])
-  end
-
   defp make_plug(env, plug, opts, guards \\ true) do
-    {plug, __resolve__(env, opts), guards}
+    resolved_opts = __resolve__(env, opts)
+
+    case Module.get_attribute(env.module, @context) do
+      context when context in [:root, :scope] ->
+        [top_scope | stack] = get_scope_stack(env)
+        {_, top_scope} = Keyword.get_and_update!(
+          top_scope, :plugs, &{nil, [{plug, resolved_opts, guards} | &1]}
+        )
+
+        Module.put_attribute(env.module, @scope, [top_scope | stack])
+      :route -> {plug, resolved_opts, guards}
+      :composition -> {plug, __unquote_var__(resolved_opts, :opts), guards}
+    end
   end
 
-  defp push_scope(env, path, using \\ []) do
+  defp push_scope(env, path, plugs \\ []) do
     Module.put_attribute(env.module, @scope, [
-      [line: env.line, path: path, using: using]
+      [line: env.line, path: path, plugs: plugs]
       | get_scope_stack(env)
     ])
   end
@@ -472,5 +456,12 @@ defmodule Honeybee do
   end
   defp __resolve__(env, statement) do
     Macro.expand(statement, env)
+  end
+
+  defp __unquote_var__(quoted, var) do
+    Macro.postwalk(quoted, fn
+      {^var, _, nil} = v -> {:unquote, [], [v]}
+      stmt -> stmt
+    end)
   end
 end

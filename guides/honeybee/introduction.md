@@ -23,6 +23,7 @@ while still being useful to developers.
 The core concept of Honeybee is the pipeline.
 Pipelines can be declared, reused and composed to avoid code repetition.
 Each request defines a unique request pipeline.
+Much of the DSL leverages techniques, concepts and styles from the `Plug` library.
 
 ### Strict compile-time validations
 Honeybee will provide strict validation during compilation,
