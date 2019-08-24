@@ -118,11 +118,7 @@ Plug has a pluggable module which can be added to the request pipeline in order 
 defmodule MyApp.MyApi.MyRouter do
   use Honeybee
 
-  pipe :body_parser do
-    plug Plug.Parsers, parsers: [:json], pass: ["application/json"], json_decoder: Poison
-  end
-
-  using :body_parser
+  plug Plug.Parsers, parsers: [:json], pass: ["application/json"], json_decoder: Poison
 
   match _, "/knock/knock", do: plug MyApp.MyApi.MyFirstRouteHandler, handler: :hello_world
 
@@ -139,18 +135,10 @@ In this example we will add a scope which validates requests on all routes.
 defmodule MyApp.MyApi.MyRouter do
   use Honeybee
 
-  pipe :body_parser do
-    plug Plug.Parsers, parsers: [:json], pass: ["application/json"], json_decoder: Poison
-  end
-
-  pipe :authorization do
-    plug Authorization, level: :admin
-  end
-
-  using :body_parser
+  plug Plug.Parsers, parsers: [:json], pass: ["application/json"], json_decoder: Poison
 
   scope do
-    using :authorization
+    plug Authorization, level: :admin
 
     get "/users", do: plug MyApp.MyApi.MyFirstRouteHandler, handler: :get_users
   end
@@ -170,18 +158,10 @@ This can be seen below in the `"knock/knock"` route.
 defmodule MyApp.MyApi.MyRouter do
   use Honeybee
 
-  pipe :body_parser do
-    plug Plug.Parsers, parsers: [:json], pass: ["application/json"], json_decoder: Poison
-  end
-
-  pipe :authorization do
-    plug Authorization, level: :admin
-  end
-
-  using :body_parser
+  plug Plug.Parsers, parsers: [:json], pass: ["application/json"], json_decoder: Poison
 
   scope do
-    using :authorization
+    plug Authorization, level: :admin
 
     get "/users", do: plug MyApp.MyApi.MyFirstRouteHandler, handler: :get_users
   end
@@ -206,22 +186,14 @@ Below is an example of forwarding in a Honeybee router.
 defmodule MyApp.MyApi.MyRouter do
   use Honeybee
 
-  pipe :body_parser do
-    plug Plug.Parsers, parsers: [:json], pass: ["application/json"], json_decoder: Poison
-  end
-
-  pipe :authorization do
-    plug Authorization, level: :admin
-  end
-
   match _, "/forward/*forward_path" do
     plug MySecondRouter, forward_with: "forward_path"
   end
 
-  using :body_parser
+  plug Plug.Parsers, parsers: [:json], pass: ["application/json"], json_decoder: Poison
 
   scope do
-    using :authorization
+    plug Authorization, level: :admin
 
     get "/users", do: plug MyApp.MyApi.MyFirstRouteHandler, handler: :get_users
   end

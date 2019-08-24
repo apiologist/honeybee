@@ -1,4 +1,4 @@
-defmodule Honeybee.Test.Pipe do
+defmodule Honeybee.Test.Composition do
   use ExUnit.Case, async: true
 
   defmodule Router do
@@ -29,24 +29,21 @@ defmodule Honeybee.Test.Pipe do
       def bad_pipe(_conn), do: 1
     end
 
-    pipe :test,     do: plug Middlewares, apply: :test
-    pipe :nop,      do: plug Middlewares, apply: :nop
-    pipe :raise,    do: plug Middlewares, apply: :test_raise
-    pipe :bad_pipe, do: plug Middlewares, apply: :bad_pipe
+    composition :tests, do: plug Middlewares, apply: opts
 
-    using :test
+    plug :tests, :test
     get "/", do: plug Routes, :ok
 
-    using :nop
+    plug :tests, :nop
     get "/test", do: plug Routes, :ok
 
     scope do
-      using :raise
+      plug :tests, :test_raise
       get "/test/raise", do: plug Routes, :ok
     end
 
     scope do
-      using :bad_pipe
+      plug :tests, :bad_pipe
       get "/test/bad_pipe", do: plug Routes, :ok
     end
   end
@@ -81,7 +78,7 @@ defmodule Honeybee.Test.Pipe do
 
     test "If a pipe returns something which isn't a conn an error is raised" do
       assert_raise RuntimeError,
-        "expected Honeybee.Test.Pipe.Router.Middlewares.call/2 " <>
+        "expected Honeybee.Test.Composition.Router.Middlewares.call/2 " <>
         "to return a Plug.Conn, all plugs must receive a connection " <>
         "(conn) and return a connection, got: 1", fn ->
         Plug.Test.conn("GET", "/test/bad_pipe")
@@ -110,7 +107,7 @@ defmodule Honeybee.Test.Pipe do
             def test(conn), do: conn
           end
 
-          pipe "not a valid pipe name", do: plug Middleware, apply: :test
+          composition "not a valid pipe name", do: plug Middleware, apply: :test
         end
       end
     end
