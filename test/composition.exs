@@ -26,7 +26,7 @@ defmodule Honeybee.Test.Composition do
       def nop(conn), do: conn
       def test(conn), do: Conn.put_private(conn, :test, "test")
       def test_raise(_conn), do: raise "Failure within test"
-      def bad_pipe(_conn), do: 1
+      def bad_plug(_conn), do: 1
     end
 
     composition :tests, do: plug Middlewares, apply: opts
@@ -43,12 +43,12 @@ defmodule Honeybee.Test.Composition do
     end
 
     scope do
-      plug :tests, :bad_pipe
-      get "/test/bad_pipe", do: plug Routes, :ok
+      plug :tests, :bad_plug
+      get "/test/bad_plug", do: plug Routes, :ok
     end
   end
 
-  describe "Runs pipes on routes" do
+  describe "Runs plugs on routes" do
     test "Sets conn private on the returned conn" do
       conn =
         Plug.Test.conn("GET", "/")
@@ -59,7 +59,7 @@ defmodule Honeybee.Test.Composition do
       assert conn.resp_body == "OK"
     end
 
-    test "Using new pipes accumulates on the old pipes" do
+    test "Using new plugs accumulates on the old plugs" do
       conn =
         Plug.Test.conn("GET", "/test")
         |> Router.call([])
@@ -69,26 +69,26 @@ defmodule Honeybee.Test.Composition do
       assert conn.resp_body == "OK"
     end
 
-    test "If a pipe raises the error propogates out of the router" do
+    test "If a plug raises the error propogates out of the router" do
       assert_raise RuntimeError, "Failure within test", fn ->
         Plug.Test.conn("GET", "/test/raise")
         |> Router.call([])
       end
     end
 
-    test "If a pipe returns something which isn't a conn an error is raised" do
+    test "If a plug returns something which isn't a conn an error is raised" do
       assert_raise RuntimeError,
         "expected Honeybee.Test.Composition.Router.Middlewares.call/2 " <>
         "to return a Plug.Conn, all plugs must receive a connection " <>
         "(conn) and return a connection, got: 1", fn ->
-        Plug.Test.conn("GET", "/test/bad_pipe")
+        Plug.Test.conn("GET", "/test/bad_plug")
         |> Router.call([])
       end
     end
   end
 
   describe "Type Validations" do
-    test "Pipe name must be an atom" do
+    test "Composition name must be an atom" do
       assert_raise FunctionClauseError, fn ->
         defmodule BadNameRouter do
           use Honeybee
@@ -107,7 +107,7 @@ defmodule Honeybee.Test.Composition do
             def test(conn), do: conn
           end
 
-          composition "not a valid pipe name", do: plug Middleware, apply: :test
+          composition "not a valid composition name", do: plug Middleware, apply: :test
         end
       end
     end

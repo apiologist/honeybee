@@ -411,18 +411,18 @@ defmodule Honeybee do
   end
 
   defp make_plug(env, plug, opts, guards \\ true) do
-    resolved_opts = __resolve__(env, opts)
+    plug = __resolve__(env, plug)
+    opts = __resolve__(env, opts)
+    guards = __resolve__(env, guards)
 
     case Module.get_attribute(env.module, @context) do
       context when context in [:root, :scope] ->
         [top_scope | stack] = get_scope_stack(env)
-        {_, top_scope} = Keyword.get_and_update!(
-          top_scope, :plugs, &{nil, [{plug, resolved_opts, guards} | &1]}
-        )
+        {_, top_scope} = Keyword.get_and_update!(top_scope, :plugs, &{nil, [{plug, opts, guards} | &1]})
 
         Module.put_attribute(env.module, @scope, [top_scope | stack])
-      :route -> {plug, resolved_opts, guards}
-      :composition -> {plug, __unquote_var__(resolved_opts, :opts), guards}
+      :route -> {plug, opts, guards}
+      :composition -> {plug, __unquote_var__(opts, :opts), guards}
     end
   end
 
@@ -455,7 +455,7 @@ defmodule Honeybee do
     statements |> Macro.prewalk(&Macro.expand(&1, env)) |> Enum.reverse()
   end
   defp __resolve__(env, statement) do
-    Macro.expand(statement, env)
+    Macro.prewalk(statement, &Macro.expand(&1, env))
   end
 
   defp __unquote_var__(quoted, var) do
