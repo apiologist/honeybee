@@ -7,37 +7,18 @@ Report any issues to the [IssueTracker](https://github.com/apiologist/honeybee/)
 ## What is Honeybee?
 Honeybee is a router intended for microservice/SOA APIs. It can be seen as an extension of [Plug](https://hexdocs.pm/plug/readme.html).
 
-Honeybee's key features:
- - Easy to understand, DRY syntax.
- - Strict compile-time validations.
- - Detailed, descriptive errors.
- - Performance (both compile-time and run-time).
- - Small package size with minimum bloat.
+Honeybee's key features / goals:
+ - Easy to understand, Easy to read, Easy to write.
+ - Small and fast.
  - Unopinionated.
+ - Strict compile-time validations.
 
-### Easy to understand
-Honeybee provides a DSL for building feature rich routing.
-The DSL is easy to read and understand,
-while still being useful to developers.
-
-The core concept of Honeybee is the pipeline.
-Pipelines can be declared, reused and composed to avoid code repetition.
-Each request defines a unique request pipeline.
-Much of the DSL leverages techniques, concepts and styles from the `Plug` library.
-
-### Strict compile-time validations
-Honeybee will provide strict validation during compilation,
-in order to inform the developer of potential problems as soon as possible.
-
-### Detailed, descriptive errors
-Honeybee will provide detailed and descriptive errors,
-clearly showing line numbers and the cause of the error in the message.
-This allows developer tools to highlight errors in the editor while the code is being written.
+Honeybee builds further ontop of the plug interface. It takes inspiration from both the Plug router and the Phoenix router, taking the good from both routers, in an attempt to provide the best router API for building small performant scalable APIs. Honeybee offers a slim DSL for declaring routes as seperate route pipelines. This allows developers to quickly develop versatile routers, and does not impose the use of other libraries in the process.
 
 ### Performance
 Honeybee is the fastest router in the Elixir language (based on microbenchmarking), surpassing the performance of both the Plug and Phoenix routers.
 
-Typical routing speeds of Honeybee is sub microsecond.
+Typical routing speeds of Honeybee are in the sub microsecond range.
 
 Benchmarking was done using [Benchee](https://hexdocs.pm/benchee/Benchee.html).
 Benchmarking performance of a batch of 10 000 random requests onto 100 routes is shown.
@@ -50,26 +31,40 @@ Benchmarking performance of a batch of 10 000 random requests onto 100 routes is
 ```
 defmodule MyApp.MyRouter do
   use Honeybee
+  alias MyApp.Routes
 
   scope "/examples" do
-    get "/hello", do: plug MyApp.Example, call: :static_route
-    get "/:id", do: plug MyApp.Example, call: :dynamic_route
-    get "/static*glob", do: plug MyApp.Example, call: :mixed_route
-    get "/*glob", do: plug MyApp.Example, call: :glob_route
+    get "/hello" do
+      plug Routes.Example, handler: :static_route
+    end
+
+    get "/:id" do
+      plug Routes.Example, handler: :dynamic_route
+    end
+
+    get "/static*glob" do
+      plug Routes.Example, handler: :mixed_route
+    end
+
+    get "/*glob" do
+      plug Routes.Example, handler: :glob_route
+    end
   end
 
-  match _, "/:*_not_found", do: plug MyApp.MyRouter, :not_found
-
+  match _, "*", do: plug :not_found
   def not_found(%Plug.Conn{path: path} = conn, _opts) do
-    Plug.Conn.resp(conn, 404, "Not Found: " <> #{path})
+    Plug.Conn.send_resp(conn, 404, "Not Found: " <> #{path})
   end
 end
 ```
 
 ```
-defmodule MyApp.Example do
-  def init(opts), do: Keyword.split!(opts, [:call])
-  def call(conn, {[call: method], opts}) do
+defmodule MyApp.Routes.Example do
+  def init(opts), do: [
+    Keyword.fetch!(opts, :handler),
+    Keyword.fetch!(opts, :opts)
+  ]
+  def call(conn, [method, opts]) do
     apply(__MODULE__, method, [conn, opts])
   end
 
@@ -77,15 +72,27 @@ defmodule MyApp.Example do
     Plug.Conn.resp(conn, 200, "world")
   end
 
-  def dynamic_route(%{path_params: {"id" => id}} = conn, _opts) do
+  def dynamic_route(conn, _opts) do
+    %{
+      "id" => id
+    } = conn.path_params
+
     Plug.Conn.resp(conn, 200, "Got " <> id)
   end
 
-  def glob_route(%{path_params: {"glob" => glob}} = conn, _opts) do
+  def glob_route(conn, _opts) do
+    %{
+      "glob" => glob
+    } = conn.path_params
+  
     Plug.Conn.resp(conn, 200, "Globbing: " <> Enum.join(glob, "/"))
   end
 
-  def mixed_route(%{path_params: {"glob" => glob}} = conn, _opts) do
+  def mixed_route(conn, _opts) do
+    %{
+      "glob" => glob
+    } = conn.path_params
+
     Plug.Conn.resp(conn, 200, "Remaining: " <> Enum.join(glob, "/"))
   end
 end
