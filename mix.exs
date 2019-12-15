@@ -50,7 +50,9 @@ defmodule Honeybee.MixProject do
       groups_for_modules: [],
       extras: [
         "guides/honeybee/introduction.md",
-        "guides/honeybee/routing.md"
+        "guides/honeybee/installation.md",
+        "guides/honeybee/getting_started.md",
+        "guides/honeybee/building_the_first_routes.md"
       ],
       groups_for_extras: [Honeybee: ~r/guides\/honeybee\/.?/]
     ]
