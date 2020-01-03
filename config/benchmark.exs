@@ -2,7 +2,7 @@ import Config
 
 config :benchmark,
   calls_per_cycle: 10000,
-  routes: 30,
+  routes: 50,
   min_path_parts: 3,
   max_path_parts: 8,
   mix_path_params: 1,

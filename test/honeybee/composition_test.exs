@@ -5,46 +5,40 @@ defmodule Honeybee.Test.Composition do
     use Honeybee
 
     defmodule Routes do
+      use Honeybee.Handler
       import Plug.Conn
-
-      def init(opts), do: opts
-      def call(conn, opts), do: apply(__MODULE__, opts, [conn, opts])
 
       def ok(conn, _opts), do: resp(conn, 200, "OK")
     end
 
     defmodule Middlewares do
-      alias Plug.Conn
+      use Honeybee.Handler
+      import Plug.Conn
 
-      def init(opts), do: opts
-
-      def call(conn, opts) do
-        action = Keyword.fetch!(opts, :apply)
-        apply(Middlewares, action, [conn])
-      end
-
-      def nop(conn), do: conn
-      def test(conn), do: Conn.put_private(conn, :test, "test")
-      def test_raise(_conn), do: raise "Failure within test"
-      def bad_plug(_conn), do: 1
+      def nop(conn, _), do: conn
+      def test(conn, _), do: put_private(conn, :test, "test")
+      def test_raise(_conn, _), do: raise "Failure within test"
+      def bad_plug(_conn, _), do: 1
     end
 
-    composition :tests, do: plug Middlewares, apply: opts
+    composition :middlewares do
+      plug Middlewares, action: opts
+    end
 
-    plug :tests, :test
-    get "/", do: plug Routes, :ok
+    plug :middlewares, :test
+    get "/", do: plug Routes, action: :ok
 
-    plug :tests, :nop
-    get "/test", do: plug Routes, :ok
+    plug :middlewares, :nop
+    get "/test", do: plug Routes, action: :ok
 
     scope do
-      plug :tests, :test_raise
-      get "/test/raise", do: plug Routes, :ok
+      plug :middlewares, :test_raise
+      get "/test/raise", do: plug Routes, action: :ok
     end
 
     scope do
-      plug :tests, :bad_plug
-      get "/test/bad_plug", do: plug Routes, :ok
+      plug :middlewares, :bad_plug
+      get "/test/bad_plug", do: plug Routes, action: :ok
     end
   end
 
@@ -78,7 +72,7 @@ defmodule Honeybee.Test.Composition do
 
     test "If a plug returns something which isn't a conn an error is raised" do
       assert_raise RuntimeError,
-        "expected Honeybee.Test.Composition.Router.Middlewares.call/2 " <>
+        "expected honeybee_action_call/2 " <>
         "to return a Plug.Conn, all plugs must receive a connection " <>
         "(conn) and return a connection, got: 1", fn ->
         Plug.Test.conn("GET", "/test/bad_plug")

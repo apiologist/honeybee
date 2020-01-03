@@ -11,14 +11,14 @@ defmodule Honeybee.Test.Forward do
 
         def init(opts), do: opts
         def call(conn, opts), do: apply(__MODULE__, opts, [conn, opts])
-  
+
         def ok(conn, _opts), do: Plug.Conn.resp(conn, 200, "ok")
       end
 
       get "/test", do: plug Routes, :ok
     end
 
-    match _, "/forward-test/*path", do: plug ForwardRouter, forward_with: "path"
+    match _, "/forward-test/*path", do: plug ForwardRouter, match: "path"
   end
 
   test "Forwards requests to the forwarded router" do

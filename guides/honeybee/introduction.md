@@ -1,8 +1,7 @@
 # Honeybee
 
-## Alpha
-This is an alpha build of Honeybee. Use in production environments is not advised.
-Report any issues to the [IssueTracker](https://github.com/apiologist/honeybee/)
+## Disclaimer
+The interface and specifics of the Honeybee API are subject to change throughout development toward version 1.0.0. Use of Honeybee in production environments can be a risk. Report any issues to the [IssueTracker](https://github.com/apiologist/honeybee/)
 
 ## What is Honeybee?
 Honeybee is a router intended for microservice/SOA APIs. It can be seen as an extension of [Plug](https://hexdocs.pm/plug/readme.html).
@@ -13,7 +12,7 @@ Honeybee's key features / goals:
  - Unopinionated.
  - Strict compile-time validations.
 
-Honeybee builds further ontop of the plug interface. It takes inspiration from both the Plug router and the Phoenix router, taking the good from both routers, in an attempt to provide the best router API for building small performant scalable APIs. Honeybee offers a slim DSL for declaring routes as seperate route pipelines. This allows developers to quickly develop versatile routers, and does not impose the use of other libraries in the process.
+Honeybee builds further ontop of the plug interface. It takes inspiration from both the Plug router and the Phoenix router, taking the good from both routers, in an attempt to provide the best router API for building small performant scalable APIs. Honeybee offers a slim DSL for declaring routes as isolated plug pipelines. This allows developers to quickly develop versatile routers, and allows the developer to use any plug compatible libraries natively in the pipelines.
 
 ### Performance
 Honeybee is the fastest router in the Elixir language (based on microbenchmarking), surpassing the performance of both the Plug and Phoenix routers.
@@ -35,19 +34,19 @@ defmodule MyApp.MyRouter do
 
   scope "/examples" do
     get "/hello" do
-      plug Routes.Example, handler: :static_route
+      plug Routes.Example, action: :static
     end
 
     get "/:id" do
-      plug Routes.Example, handler: :dynamic_route
+      plug Routes.Example, action: :param
     end
 
-    get "/static*glob" do
-      plug Routes.Example, handler: :mixed_route
+    get "/hello*glob" do
+      plug Routes.Example, action: :glob
     end
 
     get "/*glob" do
-      plug Routes.Example, handler: :glob_route
+      plug Routes.Example, action: :glob
     end
   end
 
@@ -60,40 +59,26 @@ end
 
 ```
 defmodule MyApp.Routes.Example do
-  def init(opts), do: [
-    Keyword.fetch!(opts, :handler),
-    Keyword.fetch!(opts, :opts)
-  ]
-  def call(conn, [method, opts]) do
-    apply(__MODULE__, method, [conn, opts])
+  use Honeybee.Handler
+
+  def static(conn, _opts) do
+    Plug.Conn.send_resp(conn, 200, "world")
   end
 
-  def static_route(conn, _opts) do
-    Plug.Conn.resp(conn, 200, "world")
-  end
-
-  def dynamic_route(conn, _opts) do
+  def param(conn, _opts) do
     %{
       "id" => id
     } = conn.path_params
 
-    Plug.Conn.resp(conn, 200, "Got " <> id)
+    Plug.Conn.send_resp(conn, 200, "Got " <> id)
   end
 
-  def glob_route(conn, _opts) do
+  def glob(conn, _opts) do
     %{
       "glob" => glob
     } = conn.path_params
   
-    Plug.Conn.resp(conn, 200, "Globbing: " <> Enum.join(glob, "/"))
-  end
-
-  def mixed_route(conn, _opts) do
-    %{
-      "glob" => glob
-    } = conn.path_params
-
-    Plug.Conn.resp(conn, 200, "Remaining: " <> Enum.join(glob, "/"))
+    Plug.Conn.send_resp(conn, 200, "Globbing: " <> Enum.join(glob, "/"))
   end
 end
 ```
@@ -108,8 +93,8 @@ Got 10
 $ curl http://localhost:8080/examples/this/will/be/globbed
 Globbing: this/will/be/globbed
 
-$ curl http://localhost:8080/examples/staticsomething/else
-Remaining: something/else
+$ curl http://localhost:8080/examples/hello-world/whats-up
+Globbing: -world/whats-up
 
 $ curl http://localhost:8080/something/that/doesnt/exist
 Not Found: /something/that/doesnt/exist

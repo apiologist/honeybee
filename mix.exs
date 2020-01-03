@@ -4,7 +4,7 @@ defmodule Honeybee.MixProject do
   def project do
     [
       app: :honeybee,
-      version: "0.2.2",
+      version: "0.3.0",
       elixir: "~> 1.9",
       elixirc_paths: elixirc_paths(Mix.env()),
       aliases: [],
@@ -27,7 +27,6 @@ defmodule Honeybee.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application, do: []
 
-  def elixirc_paths(:test), do: ["lib", "test"]
   def elixirc_paths(:benchmark), do: ["lib", "benchmark"]
   def elixirc_paths(_), do: ["lib"]
 
@@ -38,7 +37,8 @@ defmodule Honeybee.MixProject do
       {:ex_doc, "~> 0.19", only: :dev},
       {:phoenix, "~> 1.4.9", only: :benchmark},
       {:benchee, "~> 1.0.1", only: :benchmark},
-      {:benchee_html, "~> 1.0", only: :benchmark}
+      {:benchee_html, "~> 1.0", only: :benchmark},
+      {:jason, "~> 1.1", only: :benchmark}
     ]
   end
 

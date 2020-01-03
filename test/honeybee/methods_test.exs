@@ -5,12 +5,10 @@ defmodule Honeybee.Test.Methods do
     use Honeybee
 
     defmodule Routes do
+      use Honeybee.Handler
       import Plug.Conn
 
-      def init(opts), do: opts
-      def call(conn, opts), do: apply(__MODULE__, opts, [conn, opts])
-
-      def head(conn, _opts), do: resp(conn, 200, "head")      
+      def head(conn, _opts), do: resp(conn, 200, "head")
       def get(conn, _opts), do: resp(conn, 200, "get")
       def put(conn, _opts), do: resp(conn, 200, "put")
       def post(conn, _opts), do: resp(conn, 200, "post")
@@ -21,15 +19,15 @@ defmodule Honeybee.Test.Methods do
       def match(conn, _opts), do: resp(conn, 200, "match")
     end
 
-    head "/test", do: plug Routes, :head
-    get "/test", do: plug Routes, :get
-    put "/test", do: plug Routes, :put
-    post "/test", do: plug Routes, :post
-    patch "/test", do: plug Routes, :patch
-    connect "/test", do: plug Routes, :connect
-    options "/test", do: plug Routes, :options
-    delete "/test", do: plug Routes, :delete
-    match _, "/test/match", do: plug Routes, :match
+    head "/test", do: plug Routes, action: :head
+    get "/test", do: plug Routes, action: :get
+    put "/test", do: plug Routes, action: :put
+    post "/test", do: plug Routes, action: :post
+    patch "/test", do: plug Routes, action: :patch
+    connect "/test", do: plug Routes, action: :connect
+    options "/test", do: plug Routes, action: :options
+    delete "/test", do: plug Routes, action: :delete
+    match _, "/test/match", do: plug Routes, action: :match
   end
 
   test "head" do
