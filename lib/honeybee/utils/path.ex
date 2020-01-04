@@ -4,31 +4,6 @@ defmodule Honeybee.Utils.Path do
     use Honeybee.Utils.Error
   end
 
-  # def contains_glob_pattern?(path) do
-  #   String.contains?(path, ":*")
-  # end
-
-  # def contains_path_param?(path) do
-  #   String.contains?(path, ":")
-  # end
-
-  # def validate(path) do
-  #   cond do
-  #     !String.starts_with?(path, "/") ->
-  #       {:error, "Routes must start with a /"}
-  #     String.ends_with?(path, "/") ->
-  #       {:error, "Routes can not end with a /"}
-  #     String.contains?(path, "//") ->
-  #       {:error, "Routes can not contain //"}
-  #     String.match?(path, ~r/:\*.*?\//) ->
-  #       {:error, "Routes can not match after globbing"}
-  #     String.match?(path, ~r/\/[^/]*:[^/]*:\//) ->
-  #       {:error, "Routes can not contain two named matches"}
-  #     String.match?(path, ~r/[\s?=&@;"<>#%{}|\\\^~[\]]/)
-  #   end
-  #   {:ok, nil}
-  # end
-
   def compile(path) do
     {compile_pattern(path), compile_params(path)}
   end

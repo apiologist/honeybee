@@ -1,211 +1,305 @@
 defmodule Honeybee do
-  defmodule CompileError do
-    use Honeybee.Utils.Error
-  end
-
   @moduledoc """
-  Defines a Honeybee router.
+  A `Honeybee` router provides a DSL (Domain specific language) for defining http routes and pipelines.
+  Using Honeybee inside a module will make that module pluggable.
+  When called The module will attempt to match the incoming request to the routes defined inside the router.
 
-  Provides macros for routing http-requests.
+  Calling the router module is done either via a plug or by invoking `call/2`.
 
   Hello world example:
   ```
-    defmodule MyApplication.MyRouter do
+    defmodule Handlers do
+      use Honeybee.Handler
+
+      def hello_world(conn, _opts) do
+        Plug.Conn.send_resp(conn, 200, "Hello World")
+      end
+    end
+
+    defmodule MyApp.Router do
       use Honeybee
 
-      defmodule Handlers do
-        def init(opts), do: opts
-        def call(conn, opts), do: apply(Handlers, Keyword.fetch!(opts, :call), [conn, opts])
-
-        def hello_world(conn, _opts) do
-          IO.puts("Hello World!")
-          conn
-        end
-      end
-
-      get "/hello/world" do
-        plug Handlers, call: :hello_world
+      get "/hello/world", do plug Handlers, action: :hello_world
     end
   ```
 
-  Honeybee provides routing capabilities to Plug apps.
-  Honeybee heavily relies on the concept of plug pipelines,
-  in order to provide a useful and intuitive api to developers.
-  """
-  use Honeybee.Utils.Types
+  ## Principals
+  `Honeybee` reuses many patterns from `Plug.Builder`.
+  In fact `Honeybee` uses `Plug.Builder` under the hood to compile all routes and pipelines.
 
-  @routes       :__honeybee_routes__
-  @scope        :__honeybee_scope__
-  @compositions :__honeybee_compositions__
-  @context      :__honeybee_context__
-  @opts         :__honeybee_opts__
+  Since this pattern is quite ubiquitous among many plug packages, `Honeybee` has quite a shallow learning curve.
 
-  defmacro __using__(opts \\ []) do
-    env = __CALLER__
-    Module.put_attribute(env.module, @opts, opts)
-    Module.put_attribute(env.module, @context, :root)
-    Module.put_attribute(env.module, @scope, [[line: env.line, path: "", plugs: []]])
-    Module.register_attribute(env.module, @routes, accumulate: true)
-    Module.register_attribute(env.module, @compositions, accumulate: true)
+  `Honeybee` is performant, small and versatile, allowing developers to quickly write sustainable, readable and maintainable routing patterns.
+  It makes no assumptions about what you are trying to build, or how you and your team wants to build it, by providing many different ways of implementing the router structure.
+  This allows teams to decide internally what patterns to use and what conventions to follow.
 
-    quote do
-      import Honeybee
-      @behaviour Plug
-      @before_compile Honeybee
+  ## HTTP Routes
+  Honeybee provides ten macros which can be used to define a route.
+  The most fundamental macro of these, is the `match/3` macro.
 
-      def init(opts), do: opts
+  `match/3` expects to be called with HTTP-verb, a path string, and a plug pipeline.
+  ```
+  match "GET", "/users" do
+    plug Routes.Users, action: :list_users
+  end
+  ```
 
-      def call(conn, opts) do
-        case Keyword.fetch(opts, :forward_with) do
-          {:ok, path_key} ->
-            %{ ^path_key => path } = conn.path_params
-            dispatch(conn, path)
-          :error ->
-            dispatch(conn, conn.path_info)
-        end
-      end
+  In order to match any HTTP-verb you can use the `_` operator instead of providing a verb.
+  ```
+  match _, "/users" do
+    plug Routes.Users, action: :request
+  end
+  ```
+
+  `match/3` also supports path parameter (`:`) and path globbing (`*`)
+  ```
+  match _, "/users/:id/*glob" do
+    plug Routes.Users, action: :request
+  end
+  ```
+
+  In addition to the `match/3` macro, a couple of shorthands exist for common HTTP-verbs.
+   - `head/2`
+   - `get/2`
+   - `put/2`
+   - `post/2`
+   - `patch/2`
+   - `delete/2`
+   - `options/2`
+   - `connect/2`
+
+  Each of the above macros prefill the first argument of `match/3` and work otherwise the exact same
+  ```
+  get "/users/:id" do
+    plug Routes.Users, action: :get_user
+  end
+  ```
+
+  When a Honeybee router is called, only **one** single route can be matched.
+  Routes are also defined in the order they are written.
+
+  ## Plugs
+  The `plug/2` macro can be used to declare a plug in the plug pipeline.
+  `Honeybee` supports plugs similar to the `Plug.Builder`, however there are a couple of caveats.
+
+  Plugs can be declared pretty much anywhere inside the module.
+  They are not required to exist inside the `match/3` pipeline.
+  Defining a plug outside of a route will prepend the plug to the pipelines of all routes which are defined **after** the invokation of the `plug/2` macro.
+
+  `plug/2` also has guard support, which allows us to guard for the method of the incoming request.
+  This allows you to write plugs which only apply to certain http-verbs of requests.
+
+  ```
+  plug BodyParser when method in ["POST", "PUT", "PATCH"]
+  ```
+
+  ## Scopes
+  `Honeybee` has scope support, similar to how the `Phoenix.Router` supports scopes.
+  Scopes are used to create isolation for routes, and also optionally accepts a basepath, which is appended to any route nested inside it.
+  Isolation in this context means that, any plugs declared inside the scope only apply to routes declared inside the scope.
+
+  The `scope/1` or `scope/2` macros can be used to define a scope.
+  ```
+  scope "/users" do
+    plug Authorization, level: :admin
+
+    get "/:id" do
+      plug Routes.Users, action: :get_user
     end
   end
 
-  @spec __before_compile__(Macro.Env.t()) :: Macro.t()
+  # The authorization plug is not active outside the scope.
+  ```
+
+  ## Compositions
+  `Honeybee` includes a special macro dedicated to building runtime pipelines which is the `composition/2` macro.
+  This macro allows us to write very versatile inline pipelines, similar to the `pipeline/2` macro of the `Phoenix.Router`.
+
+  The main difference is that, inside compositions, plugs can modify the options which the composition was called with.
+  This allows us to provide options to many plugs in a single call, reducing the amount of these kind of pipelines we need.
+
+  A composition will create a named private function in the router module.
+  The name of this function will be the name we give the composition.
+  This pattern allows us to use our composition as a plug, by its name.
+
+  ```
+  composition :auth do
+    plug MyApp.JWT.Verifier, Keyword.get(opts, :jwt, [header: "authorization"])
+    plug MyApp.Authorization, Keyword.get(opts, :auth, [level: :user])
+  end
+
+  scope do
+    plug :auth, jwt: [header: "x_authorization"], auth: [level: :admin]
+
+    post "/users" do
+      plug Routes.Users, action: :create_user
+    end
+  end
+  ```
+
+  ## No Match
+  Some requests will not match any route of the router.
+  The default behaviour for `Honeybee` in such cases is to simply return the conn unmodified.
+
+  To override this behaviour, simply define the function `no_match/2` in the router module, and do as you wish.
+
+  ```
+  def no_match(conn, _opts) do
+    Plug.Conn.send_resp(conn, 404, "The requested route does not exist")
+  end
+  ```
+
+  ## Forwarding
+  In order to forward to another Honeybee router, using part of the original requested path, the :match option can be used when plugging to that router.
+  The :match option is expected to contain the name of the path glob which should be used when matching in the forwarded router.
+
+  ```
+  match _, "/users/*user_request_path" do
+    plug UserRouter, match: "user_request_path"
+  end
+  ```
+  """
+
+  @doc false
+  defmacro __using__(_opts \\ []) do
+    quote do
+      @behaviour Plug
+      import Honeybee
+
+      def init(opts), do: opts
+      def call(conn, opts) do
+        case Keyword.fetch(opts, :match) do
+          {:ok, key} -> %Elixir.Plug.Conn{
+            honeybee_call(%Elixir.Plug.Conn{conn | path_info: conn.path_params[key]}, opts)
+            | path_info: conn.path_info
+          }
+          :error -> honeybee_call(conn, opts)
+        end
+      end
+      def no_match(conn, _opts), do: conn
+
+      defoverridable [init: 1, call: 2, no_match: 2]
+
+      Module.register_attribute(__MODULE__, :path, accumulate: false)
+      Module.register_attribute(__MODULE__, :context, accumulate: false)
+      Module.register_attribute(__MODULE__, :plugs, accumulate: false)
+      Module.register_attribute(__MODULE__, :compositions, accumulate: true)
+      Module.register_attribute(__MODULE__, :routes, accumulate: true)
+
+      @path ""
+      @plugs []
+      @context :root
+
+      @before_compile Honeybee
+    end
+  end
+
+  @doc false
   defmacro __before_compile__(env) do
     compiled_compositions = compile_compositions(env)
-
     compiled_routes = compile_routes(env)
-    unmatched_capture =
-      quote do
-        def dispatch(%Elixir.Plug.Conn{method: method, path_info: path}, _) do
-          raise "No matching route for request: " <> method <> " /" <> Enum.join(path, "/")
-        end
-      end
 
-    compiled_compositions ++ compiled_routes ++ [unmatched_capture]
+    quote do
+      unquote(compiled_compositions)
+      unquote(compiled_routes)
+      def honeybee_call(conn, opts), do: no_match(conn, opts)
+      def compositions(), do: @compositions
+      def routes(), do: @routes
+    end
   end
 
+  @doc false
   defp compile_routes(env) do
-    Module.get_attribute(env.module, @routes)
-    |> Enum.reverse()
-    |> Enum.map(fn route ->
-      scope_stack = Keyword.fetch!(route, :scope)
+    Module.get_attribute(env.module, :routes)
+    |> Enum.reduce([], fn ({method, path, plugs}, acc) ->
+      {conn, body} = Plug.Builder.compile(env, plugs, [])
+      {path_pattern, path_params} = Honeybee.Utils.Path.compile(path)
 
-      scope_plugs = scope_stack
-        |> Enum.flat_map(&Keyword.fetch!(&1, :plugs))
-
-      route_plugs = Keyword.fetch!(route, :plugs)
-      {conn, compiled_pipeline} = Elixir.Plug.Builder.compile(
-        env,
-        route_plugs ++ scope_plugs,
-        Module.get_attribute(env.module, @opts)
-      )
-
-      scoped_path = Enum.reduce(scope_stack, "", &(Keyword.fetch!(&1, :path) <> &2))
-      path = scoped_path <> Keyword.fetch!(route, :path)
-
-      {pattern, params} = Honeybee.Utils.Path.compile(path)
-
-      quote line: Keyword.fetch!(route, :line) do
-        def dispatch(%Elixir.Plug.Conn{
-          method: unquote(Keyword.fetch!(route, :method))
-        } = unquote(conn), unquote(pattern)) do
+      compiled_route = quote do
+        def honeybee_call(%Elixir.Plug.Conn{
+          method: unquote(method) = unquote({:method, [generated: true], nil}),
+          path_info: unquote(path_pattern)
+        } = unquote(conn), _opts) do
           unquote(conn) = %Elixir.Plug.Conn{
-            unquote(conn) | path_params: unquote(params)
+            unquote(conn) | path_params: unquote(path_params)
           }
-          unquote(compiled_pipeline)
+          unquote(body)
         end
       end
+
+      [compiled_route | acc]
     end)
   end
 
+  @doc false
   defp compile_compositions(env) do
-    Module.get_attribute(env.module, @compositions)
-    |> Enum.map(fn composition ->
-      name = Keyword.fetch!(composition, :name)
-      plugs = Keyword.fetch!(composition, :plugs)
-      
-      {conn, compiled_plugs} = Elixir.Plug.Builder.compile(
-        env,
-        plugs,
-        [{:init_mode, :runtime} | Module.get_attribute(env.module, @opts)]
-      )
-      
-      quote line: Keyword.fetch!(composition, :line) do
-        defp unquote(name)(unquote(conn), unquote({:opts, [], nil})) do
-          unquote(compiled_plugs)
+    Module.get_attribute(env.module, :compositions)
+    |> Enum.reduce([], fn ({name, plugs}, acc) ->
+      plugs = Enum.map(plugs, fn
+        {plug, opts, guards} -> {plug, {:unquote, [], [opts]}, guards}
+      end)
+
+      {conn, body} = Plug.Builder.compile(env, plugs, [init_mode: :runtime])
+
+      compiled_composition = quote do
+        def unquote(name)(%Elixir.Plug.Conn{
+          method: unquote({:method, [generated: true], nil})
+        } = unquote(conn), unquote({:opts, [generated: true], nil})) do
+          unquote(body)
         end
       end
+
+      [compiled_composition | acc]
     end)
   end
 
   @doc """
-  An alias for `match "HEAD"`
+  Defines a named composition, which can be invoked using `plug/2`
+
+  Compositions allow you to compose plug pipelines in-place.
+  `composition/2` uses `Plug.Builder` under the hood to construct a private function which can be called using plug.
+
+  Inside compositions, the `opts` variable is available.
+  The `opts` var contains the options with which the composition was plugged.
+  Inside the composition you can manipulate the opts variable however you like.
+
+  Currently compositions evaluate options runtime, which can be very slow when composed plugs have expensive `init/1` methods.
+  In such cases, consider not using the composition method.
+
+  In a future release an option might be provided to resolve options compile-time.
+
+  ## Examples
+  ```
+  composition :example do
+    plug :local_plug, Keyword.take(opts, [:action])
+    plug PluggableExmapleModule, Keyword.fetch!(opts, :example_opts)
+  end
+  ```
   """
-  @spec head(String.t(), term()) :: nil
-  defmacro head(path, do: block) when is_bitstring(path) do
-    make_route(__CALLER__, "HEAD", path, block)
-    nil
+  @spec composition(atom(), term()) :: term()
+  defmacro composition(name, plug_pipeline)
+  defmacro composition(name, do: block) when is_atom(name) do
+    run_in_scope(quote do
+      case @context do
+        :root ->
+          @context :composition
+          @plugs []
+          var!(opts) = {:opts, [], nil}
+          unquote(block)
+          @compositions {unquote(name), @plugs}
+        _ -> raise "Cannot define a composition when not in the root scope"
+      end
+    end)
   end
 
-  @doc """
-  An alias for `match "GET"`
-  """
-  @spec get(String.t(), term()) :: nil
-  defmacro get(path, do: block) when is_bitstring(path) do
-    make_route(__CALLER__, "GET", path, block)
-    nil
-  end
+  @verbs [head: "HEAD", get: "GET", put: "PUT", post: "POST", patch: "PATCH", options: "OPTIONS", delete: "DELETE", connect: "CONNECT"]
+  for {name, verb} <- @verbs do
+    @doc """
+    An alias for `match "#{verb}"`
 
-  @doc """
-  An alias for `match "POST"`
-  """
-  @spec post(String.t(), term()) :: nil
-  defmacro post(path, do: block) when is_bitstring(path) do
-    make_route(__CALLER__, "POST", path, block)
-    nil
-  end
-
-  @doc """
-  An alias for `match "PUT"`
-  """
-  @spec put(String.t(), term()) :: nil
-  defmacro put(path, do: block) when is_bitstring(path) do
-    make_route(__CALLER__, "PUT", path, block)
-    nil
-  end
-
-  @doc """
-  An alias for `match "PATCH"`
-  """
-  @spec patch(String.t(), term()) :: nil
-  defmacro patch(path, do: block) when is_bitstring(path) do
-    make_route(__CALLER__, "PATCH", path, block)
-    nil
-  end
-
-  @doc """
-  An alias for `match "CONNECT"`
-  """
-  @spec connect(String.t(), term()) :: nil
-  defmacro connect(path, do: block) when is_bitstring(path) do
-    make_route(__CALLER__, "CONNECT", path, block)
-    nil
-  end
-
-  @doc """
-  An alias for `match "OPTIONS"`
-  """
-  @spec options(String.t(), term()) :: nil
-  defmacro options(path, do: block) when is_bitstring(path) do
-    make_route(__CALLER__, "OPTIONS", path, block)
-    nil
-  end
-
-  @doc """
-  An alias for `match "DELETE"`
-  """
-  @spec delete(String.t(), term()) :: nil
-  defmacro delete(path, do: block) when is_bitstring(path) do
-    make_route(__CALLER__, "DELETE", path, block)
-    nil
+    See `match/3` for details
+    """
+    defmacro unquote(name)(path, do: block) when is_bitstring(path), do: put_route(unquote(verb), path, block)
   end
 
   @doc """
@@ -215,14 +309,7 @@ defmodule Honeybee do
   the router attempts to match the request against the routes defined in the router.
   The router will only invoke the first route that matches the incoming request.
   The priority of the route is determined by the order of the match statements in the router.
-
-  When a match is made,
-  the scoped pipelines for the route are invoked,
-  then the route pipeline is invoked.
-
-  Honeybee will always match exactly one route to the request.
-  To provide a fallback route, use `match _, "*" do ... end`.
-  Honeybee inserts a default fallback of this kind at the bottom of the route table which raises an error.
+  When a match is made, the scoped pipelines for the route are invoked, then the route pipeline is invoked.
 
   ### Method
   The `http_method` can be any of the following literals:
@@ -234,16 +321,15 @@ defmodule Honeybee do
    - `"CONNECT"` (`connect/2`)
    - `"OPTIONS"` (`options/2`)
    - `"DELETE"` (`delete/2`)
-  
+
   For each method literal, a shorthand method exists (see above.)
-  
   `http_method` can also be a pattern, for example `_` will match any http method.
 
   Guards are currently not supported, but may receive support in future versions of Honeybee.
 
   ### Path
   `path` is a pattern used to match incoming requests.
-  
+
   Paths can be any string literal, and also have parameter and glob support.
   All parameters and globs are named.
   Resolved parameters and globs are available using their name as key
@@ -266,202 +352,131 @@ defmodule Honeybee do
 
   ### Plug pipeline
   The `plug_pipeline` contains the route pipeline, declared as a do-block of plugs.
-
   Plugs in the route pipeline are invoked in order.
 
   ## Examples
   Using the get method to specify a route.
-    ```
-    defmodule ExampleApp.Router do
-      use Honeybee
-
-      get "/api/v1/examples/:id" do
-        plug ExampleApp.Routes.Example, call: :get
-      end
+  ```
+    get "/api/v1/examples/:id" do
+      plug Routes.Example, action: :get
     end
-    ```
-  
+  ```
+
   Using the match method to specify the same route as above.
-    ```
-    defmodule ExampleApp.Router do
-      use Honeybee
-
-      match "GET", "/api/v1/examples/:id" do
-        plug ExampleApp.Routes.Example, call: :get
-      end
+  ```
+    match "GET", "/api/v1/examples/:id" do
+      plug Routes.Example, action: :get
     end
-    ```
+  end
+  ```
   """
-  @spec match(String.t() | Var.t(), String.t(), term()) :: nil
+  @spec match(String.t() | Var.t(), String.t(), term()) :: term()
   defmacro match(http_method, path, plug_pipeline)
-  defmacro match(method, path, do: block) when is_bitstring(path) do
-    make_route(__CALLER__, method, path, block)
-    nil
+  defmacro match(method, path, do: stmts) when is_binary(path), do: put_route(method, path, stmts)
+
+  defp put_route(method, path, plugs) do
+    run_in_scope(quote do
+      case @context do
+        ctx when ctx in [:root, :scope] ->
+          @context :route
+          unquote(plugs)
+          @routes {unquote(Macro.escape(method)), @path <> unquote(path), @plugs}
+        _ -> raise "Cannot define routes in any other context than scopes"
+      end
+    end)
   end
 
   @doc """
-  Declares an isolated scope with the provided `path`. 
+  Declares a plug.
+
+  The `plug/2` macro can be used to declare a plug in the plug pipeline.
+  `Honeybee` supports plugs similar to the `Plug.Builder`, however there are a couple of caveats.
+
+  Plugs can be declared pretty much anywhere inside the module.
+  Defining a plug outside of a route will prepend the plug to the pipelines of all routes which are defined **after** the invokation of the `plug/2` macro.
+
+  `plug/2` also has guard support, which allows us to guard for the method of the incoming request.
+  This allows you to write plugs which only apply to certain http-verbs of requests.
+
+  ```
+  plug BodyParser when method in ["POST", "PUT", "PATCH"]
+  ```
+
+  For more information on the plug pattern see `Plug`
+  """
+  @spec plug(atom(), term()) :: term()
+  defmacro plug(plug, opts \\ [])
+  defmacro plug({:when, _, [plug, guards]}, opts), do: gen_plug(__CALLER__, plug, opts, guards)
+  defmacro plug(plug, {:when, _, [opts, guards]}), do: gen_plug(__CALLER__, plug, opts, guards)
+  defmacro plug(plug, opts), do: gen_plug(__CALLER__, plug, opts, true)
+
+  defp gen_plug(env, plug, opts, guards) do
+    plug = Macro.expand(plug, %{env | function: {:init, 1}})
+
+    quote do
+      case @context do
+        :composition -> @plugs [{unquote(plug), unquote(Macro.escape(opts)), unquote(Macro.escape(guards))} | @plugs]
+        _ -> @plugs [{unquote(plug), unquote(opts), unquote(Macro.escape(guards))} | @plugs]
+      end
+    end
+  end
+
+  @doc """
+  Declares an isolated scope with the provided `path`.
 
   Scopes are used to encapsulate and isolate any enclosed routes and plugs.
   Calling `plug/2` inside a scope will not affect any routes declared outside that scope.
 
   Scopes take an optional base path as the first argument.
-
   Honeybee wraps the top level of the module in whats known as the root scope.
-
   Scopes can be nested.
 
   ## Examples
   In the following example,
-  an http request `"GET"` on `"/"` will invoke `RootHandler.call/2`.
-  An http request `"GET"` on `"/api/v1"` will invoke `ExamplePlug.call/2` followed by `V1Handler.call/2`
+  The request `"GET" "/"` will invoke `RootHandler.call/2`.
+  The request `"GET" "/api/v1"` will invoke `ExamplePlug.call/2` followed by `V1Handler.call/2`
 
   ```
-  defmodule ExampleApp.Router do
-    use Honeybee
-  
-    scope "/api" do
-      plug ExamplePlug
-  
-      get "/v1" do
-        plug V1Handler, call: :get
+  scope "/api" do
+    plug ExamplePlug
+
+    get "/v1" do
+      plug V1Handler, action: :get
+    end
+  end
+
+  get "/" do
+    plug RootHandler, action: :get
+  end
+  ```
+  """
+  @spec scope(String.t(), term()) :: term()
+  defmacro scope(path \\ "/", plug_pipeline)
+  defmacro scope(path, do: stmts) when is_binary(path) do
+    run_in_scope(quote do
+      case @context do
+        ctx when ctx in [:root, :scope] ->
+          @context :scope
+          @path @path <> unquote(path)
+          unquote(stmts)
+        _ -> raise "Cannot define scopes inside anything other contexts than inside a scope or the root context"
+      end
+    end)
+  end
+
+  @doc false
+  defp run_in_scope(quoted_stmts) do
+    quote generated: true do
+      with(
+        outer_plugs = @plugs,
+        outer_path = @path,
+        outer_context = @context
+      ) do
+        unquote(quoted_stmts)
+        @plugs outer_plugs
+        @path outer_path
+        @context outer_context
       end
     end
-  
-    get "/" do
-      plug RootHandler, call: :get
-    end
-  end
-  ```
-  """
-  @spec scope(String.t(), term()) :: nil
-  defmacro scope(path \\ "", do: block) when is_bitstring(path) do
-    make_scope(__CALLER__, path, block)
-    nil
-  end
-
-  @doc """
-  Declares a new plug composition with `name`, containing `plug_pipeline`
-
-  Compositions allow you to compose plug_pipelines in-place, `composition/2` uses `Plug.Builder` under the hood.
-  A compossition compiles into a private function named `name`, meaning you can plug it as any other function.
-
-  Inside compositions, the `opts` variable is available.
-  The `opts` var contains the options with which the composition was plugged.
-  Inside the composition you can manipulate the opts variable however you like.
-  
-  Currently compositions evaluate options runtime,
-  which can be very slow when composed plugs have expensive `init/1` methods.
-  In such cases, consider not using the composition method.
-
-  In a future release an option might be provided to resolve options using the `opts` at compile-time.
-
-  ## Examples
-  ```
-  composition :example do
-    plug :local_example1, opts
-    plug PluggableExmapleModule 
-  end
-  ```
-  """
-  defmacro composition(name, plug_pipeline)
-  @spec composition(atom(), term()) :: nil
-  defmacro composition(name, do: block) when is_atom(name) do
-    make_composition(__CALLER__, name, block)
-    nil
-  end
-
-  @doc """
-    Declares a plug.
-
-    For documentation regarding `plug/2` go to `Plug`
-  """
-  @spec plug(atom() | Alias.t(), keyword()) :: Honeybee.Plug.t()
-  defmacro plug(plug, opts \\ []) do
-    make_plug(__CALLER__, plug, opts)
-  end
-
-  defp make_route(env, method, path, block) do
-    scope = Module.get_attribute(env.module, @scope)
-    plugs = __expand_block__(env, :route, block)
-
-    Module.put_attribute(env.module, @routes, [
-      line: env.line,
-      scope: scope,
-      method: method,
-      path: path,
-      plugs: plugs
-    ])
-  end
-
-  defp make_scope(env, path, block) do
-    push_scope(env, path)
-    __expand_block__(env, :scope, block)
-    pop_scope(env)
-  end
-
-  defp make_composition(env, name, block) do
-    plugs = __expand_block__(env, :composition, block)
-
-    Module.put_attribute(env.module, @compositions, [
-      line: env.line,
-      name: name,
-      plugs: plugs
-    ])
-  end
-
-  defp make_plug(env, plug, opts, guards \\ true) do
-    plug = __resolve__(env, plug)
-    opts = __resolve__(env, opts)
-    guards = __resolve__(env, guards)
-
-    case Module.get_attribute(env.module, @context) do
-      context when context in [:root, :scope] ->
-        [top_scope | stack] = get_scope_stack(env)
-        {_, top_scope} = Keyword.get_and_update!(top_scope, :plugs, &{nil, [{plug, opts, guards} | &1]})
-
-        Module.put_attribute(env.module, @scope, [top_scope | stack])
-      :route -> {plug, opts, guards}
-      :composition -> {plug, __unquote_var__(opts, :opts), guards}
-    end
-  end
-
-  defp push_scope(env, path, plugs \\ []) do
-    Module.put_attribute(env.module, @scope, [
-      [line: env.line, path: path, plugs: plugs]
-      | get_scope_stack(env)
-    ])
-  end
-
-  defp pop_scope(env) do
-    [_ | scope] = get_scope_stack(env)
-    Module.put_attribute(env.module, @scope, scope)
-  end
-
-  defp get_scope_stack(env) do
-    Module.get_attribute(env.module, @scope)
-  end
-
-  defp __expand_block__(env, ctx, block) do
-    outer_context = Module.get_attribute(env.module, @context)
-    Module.put_attribute(env.module, @context, ctx)
-    statements = __expand_block__(env, block)
-    Module.put_attribute(env.module, @context, outer_context)
-    statements
-  end
-  defp __expand_block__(env, {:__block__, _, statements}), do: __resolve__(env, statements)
-  defp __expand_block__(env, statement), do: __resolve__(env, [statement])
-  defp __resolve__(env, statements) when is_list(statements) do
-    statements |> Macro.prewalk(&Macro.expand(&1, env)) |> Enum.reverse()
-  end
-  defp __resolve__(env, statement) do
-    Macro.prewalk(statement, &Macro.expand(&1, env))
-  end
-
-  defp __unquote_var__(quoted, var) do
-    Macro.postwalk(quoted, fn
-      {^var, _, nil} = v -> {:unquote, [], [v]}
-      stmt -> stmt
-    end)
   end
 end

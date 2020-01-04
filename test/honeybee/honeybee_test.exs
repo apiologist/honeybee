@@ -10,10 +10,8 @@ defmodule Honeybee.Test do
     assert function_exported?(Router, :init, 1)
   end
 
-  test "Raises requests" do
-    assert_raise RuntimeError, "No matching route for request: GET /test",
-      fn ->
-        Router.call(Plug.Test.conn("GET", "/test"), [])
-      end
+  test "Returns unmodified conn when no match is found" do
+    conn = Plug.Test.conn("GET", "/test")
+    assert conn == Router.call(conn, [])
   end
 end

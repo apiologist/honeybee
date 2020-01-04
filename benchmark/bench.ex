@@ -35,9 +35,9 @@ defmodule Mix.Tasks.Benchmark do
 
     Benchee.run(
       %{
-        "Paug.Router" => plug_call,
+        "Plug.Router" => plug_call,
         "Phoenix.Router" => phoenix_call,
-        "ZHoneybee" => honeybee_call
+        "Honeybee" => honeybee_call
       },
       formatters: [
         Benchee.Formatters.HTML,

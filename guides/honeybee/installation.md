@@ -4,7 +4,7 @@ Honeybee is installed by adding it to the dependencies of the mix.exs:
 ```
 {
   {:plug_cowboy, "~> 2.0"},
-  {:honeybee, "~> 0.2.2"}
+  {:honeybee, "~> 0.3"}
 }
 ```
 

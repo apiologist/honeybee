@@ -5,10 +5,8 @@ defmodule Honeybee.Test.Scope do
     use Honeybee
 
     defmodule Routes do
+      use Honeybee.Handler
       import Plug.Conn
-
-      def init(opts), do: opts
-      def call(conn, opts), do: apply(__MODULE__, opts, [conn, opts])
 
       def ok(conn, _opts), do: resp(conn, 200, "OK")
       def test3(conn, _opts), do: resp(conn, 200, "TEST3")
@@ -21,21 +19,21 @@ defmodule Honeybee.Test.Scope do
     plug :test_global
     scope do
       plug :test1
-      get "/test1", do: plug Routes, :ok
+      get "/test1", do: plug Routes, action: :ok
     end
 
     scope "/test1" do
       plug :test2
-      get "/test2", do: plug Routes, :ok
-      
+      get "/test2", do: plug Routes, action: :ok
+
       scope "/test2" do
-        get "/test3", do: plug Routes, :test3
+        get "/test3", do: plug Routes, action: :test3
       end
     end
   end
 
   describe "Scopes seperate pipe environments" do
-    test "global pipes are always active" do
+    test "global plugs are always active" do
       conn =
         Plug.Test.conn("GET", "/test1")
         |> Router.call([])
@@ -47,7 +45,7 @@ defmodule Honeybee.Test.Scope do
       assert conn.private.test_global == :test_global
     end
 
-    test "pipes belong to the scope in which they are declared" do
+    test "plugs belong to the scope in which they are declared" do
       conn =
         Plug.Test.conn("GET", "/test1")
         |> Router.call([])

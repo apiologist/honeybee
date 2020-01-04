@@ -9,10 +9,8 @@ defmodule Honeybee.Test.Plug do
     end
 
     defmodule Routes do
+      use Honeybee.Handler
       import Plug.Conn
-
-      def init(opts), do: opts
-      def call(conn, opts), do: apply(__MODULE__, opts, [conn, opts])
 
       def ok(conn, _opts), do: resp(conn, 200, "OK")
     end
@@ -27,7 +25,7 @@ defmodule Honeybee.Test.Plug do
           |> Map.put_new(:test, [])
           |> Map.get_and_update(:test, &{&1, [id | &1]})
           |> elem(1)
-        
+
         %Conn{conn | private: private}
       end
     end
@@ -44,15 +42,15 @@ defmodule Honeybee.Test.Plug do
       parsers: [:urlencoded, :json],
       json_decoder: MyOwn.JSON.Decoder
 
-    get "/", do: plug Routes, :ok
-    
+    get "/", do: plug Routes, action: :ok
+
     plug :set_id, id: 1
     plug Middlewares, id: 2
-    
-    get "/test", do: plug Routes, :ok
+
+    get "/test", do: plug Routes, action: :ok
 
     plug :test_raise
-    get "/raise", do: plug Routes, :ok
+    get "/raise", do: plug Routes, action: :ok
   end
 
   describe "Runs plugs on routes" do

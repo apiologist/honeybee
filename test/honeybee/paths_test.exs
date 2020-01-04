@@ -5,28 +5,27 @@ defmodule Honeybee.Test.Paths do
     use Honeybee
 
     defmodule Routes do
-
-      def init(opts), do: opts
-      def call(conn, opts), do: apply(__MODULE__, opts, [conn, opts])
+      use Honeybee.Handler
+      import Plug.Conn
 
       def test_dynamic(%Plug.Conn{path_params: %{"id" => id}} = conn, _opts) do
-        Plug.Conn.put_private(conn, :id, id)
+        put_private(conn, :id, id)
       end
       def test_partial_dynamic(%Plug.Conn{path_params: %{"id" => id}} = conn, _opts) do
-        Plug.Conn.put_private(conn, :id, id)
+        put_private(conn, :id, id)
       end
       def test_glob(%Plug.Conn{path_params: %{"glob" => glob}} = conn, _opts) do
-        Plug.Conn.put_private(conn, :glob, glob)
+        put_private(conn, :glob, glob)
       end
       def test_partial_glob(%Plug.Conn{path_params: %{"glob" => glob}} = conn, _opts) do
-        Plug.Conn.put_private(conn, :glob, glob)
+        put_private(conn, :glob, glob)
       end
     end
 
-    get "/test/partial-:id", do: plug Routes, :test_partial_dynamic
-    get "/test/:id", do: plug Routes, :test_dynamic
-    get "/test/partial-*glob", do: plug Routes, :test_partial_glob
-    get "/test/*glob", do: plug Routes, :test_glob
+    get "/test/partial-:id", do: plug Routes, action: :test_partial_dynamic
+    get "/test/:id", do: plug Routes, action: :test_dynamic
+    get "/test/partial-*glob", do: plug Routes, action: :test_partial_glob
+    get "/test/*glob", do: plug Routes, action: :test_glob
   end
 
   test "dynamic route" do
